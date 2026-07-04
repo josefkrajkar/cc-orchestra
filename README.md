@@ -4,7 +4,7 @@ A monorepo with two independently installable Claude Code plugins:
 
 | Package | What it is | Standalone? |
 |---|---|---|
-| [`packages/orchestra`](packages/orchestra/README.md) | Multi-agent orchestration plugin — 3-layer architecture (planning/orchestration/execution), 7 specialized agents, staged pipeline with quality gates, file claiming, wisdom accumulation, boulder session persistence. | Yes |
+| [`packages/orchestra`](packages/orchestra/README.md) | Multi-agent orchestration plugin — 3-layer architecture (planning/orchestration/execution), 8 specialized agents, staged pipeline with quality gates, file claiming, wisdom accumulation, boulder session persistence. | Yes |
 | [`packages/orchestra-memory`](packages/orchestra-memory/README.md) | Standalone cross-project graph-memory MCP server — SQLite-backed (`node:sqlite`), FTS5 full-text search, temporal validity, `global`/`project`/`private` scoping, plus session-start/post-compact context injection. | Yes |
 
 Both plugins are fully usable on their own. `orchestra-memory` is the **optional companion** to `orchestra`: install it alongside `orchestra` to upgrade wisdom accumulation from a single project's JSON file into a graph of facts shared across every project on the machine, with temporal validity and scoping. Install `orchestra` without it and everything still works — it falls back to the legacy `.claude/orchestra-wisdom.json` file. Install `orchestra-memory` on its own and you get a general-purpose graph-memory MCP server with no dependency on the orchestration plugin at all.
@@ -22,10 +22,11 @@ orchestra/                              # this repo
 ├── packages/
 │   ├── orchestra/                      # orchestration plugin
 │   │   ├── .claude-plugin/plugin.json  # name: orchestra — 9 hook events, no .mcp.json
-│   │   ├── agents/                     # conductor, architect, executor, craftsman, sentinel, scout, scholar
+│   │   ├── agents/                     # conductor, architect, executor, craftsman, sentinel, scout, scholar, verifier
 │   │   ├── commands/                   # /orchestrate, /plan, /review, /parallel, /ralph, /boulder, /wisdom,
 │   │   │                               #   /status, /memory-setup, /memory-migrate
-│   │   ├── skills/                     # orchestrate, deep-plan, deep-review, skill-extract, memory-discipline
+│   │   ├── skills/                     # orchestrate, deep-plan, deep-review, skill-extract, memory-discipline,
+│   │   │                               #   verify, systematic-debugging
 │   │   ├── conventions/                # framework-specific rule digests (e.g. React)
 │   │   ├── scripts/                    # orchestration hooks (session-start, guards, tracking, gates)
 │   │   └── README.md

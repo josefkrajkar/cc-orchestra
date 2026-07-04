@@ -20,7 +20,7 @@ This repo is a two-package monorepo, each package a standalone Claude Code plugi
 │     conductor (inherit/opus) + executor (opus)   │
 ├─────────────────────────────────────────────────┤
 │               EXECUTION LAYER                    │
-│     craftsman (sonnet) + sentinel (sonnet)       │
+│     craftsman (sonnet) + sentinel (sonnet) + verifier (sonnet, optional)     │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -33,6 +33,7 @@ This repo is a two-package monorepo, each package a standalone Claude Code plugi
 | architect, executor | opus | Planning, architecture, coordination — complex reasoning needed |
 | conductor | inherit (or opus) | May run as `inherit` to benefit from the calling session model; falls back to opus |
 | sentinel | sonnet | Structured checklist review follows a fixed protocol — full opus reasoning is unnecessary and expensive |
+| verifier | sonnet | Optional E2E smoke/browser verification — bounded, reportable protocol; discovers browser MCP tools at runtime, sonnet sufficient |
 
 **Note on model assignment:** Agent frontmatter `model:` may be silently ignored by some Claude Code versions. Orchestrators must **also pass `model` explicitly in every Agent tool call** (e.g. `model: "sonnet"`) — the tool-level parameter is the reliable path.
 
@@ -75,6 +76,7 @@ This repo is a two-package monorepo, each package a standalone Claude Code plugi
 - **Temporal validity (Graphiti-style) over destructive updates:** facts are never overwritten in place — a new observation either supersedes an old one (`superseded_by` + `invalidated_at`) or is invalidated outright (`invalidated_at`, soft delete by default; hard delete requires explicit `hard: true`). This keeps `memory_inspect`'s history trustworthy and makes migration/rollback non-destructive by construction.
 - **Wisdom absorption with legacy fallback, not a hard cutover:** `wisdom_get`/`wisdom_add` are thin wrappers over `memory_search`/`memory_save` so `packages/orchestra/commands/wisdom.md` and the executor/conductor wisdom protocols gained cross-project graph storage without a breaking migration. Every wisdom-reading call site tries the MCP tool first and falls back to reading `.claude/orchestra-wisdom.json` directly if the tool can't be found via ToolSearch or the MCP server isn't running — this is deliberate dual-mode operation during the transition, not dead code to clean up.
 - **`project_id` derivation reuses the boulder instance key algorithm:** `sha256($PROJECT_ROOT + "\n")` truncated to 16 hex chars, so graph memory project scoping and boulder instance scoping share identity by construction instead of drifting into two separate "what project is this" concepts. See the newline gotcha above.
+- **Verifier is a separate 8th agent, not a sentinel-mode:** sentinel is contractually read-only (`Read`/`Glob`/`Grep`), while E2E verification needs `Bash` plus browser automation. Browser MCP (Playwright) tools are discovered via ToolSearch at runtime and are NEVER pre-attached in frontmatter — verifier's frontmatter `tools` is capped at `Read`/`Glob`/`Grep`/`Bash`. Stage 6.5 is optional/opt-in: the default pipeline never dispatches it, so default `/orchestrate` cost is unchanged. Fail-open SKIP is a first-class outcome (skip ≠ failure).
 
 ## FRAMEWORK_CONVENTIONS
 
@@ -134,3 +136,11 @@ Summary of all changes from the R1–R10 upgrade batch:
 **R9 — Fragility fixes:** jq-missing produces visible warnings in all scripts. Boulder restore on hash mismatch requires explicit user confirmation before recreating tasks. `deep-plan` skill references architect's plan template section instead of duplicating it.
 
 **R10 — Conventions sync:** `packages/orchestra/conventions/react.md` and `packages/orchestra/conventions/react-review-checklist.md` are now thin pointers (~20 lines each) containing only the P0 digest. User-level skill `~/.claude/skills/react-conventions/` takes precedence; plugin files are offline fallback. All three agents (craftsman, sentinel, architect) updated to check user skill first.
+
+## 2026-07-04 upgrade
+
+Added the optional end-to-end **verifier** agent — the plugin's 8th agent (sonnet, orange, Execution layer alongside craftsman + sentinel) — as pipeline stage 6.5. It is opt-in only, triggered via `--verify` or conductor's web-facing judgment; the default pipeline never dispatches it, so default `/orchestrate` cost and behavior are unchanged. Verifier findings rated P0/P1 feed into the existing max-2-cycle fix loop unchanged; anything below that, or an environment where verification can't run, resolves to a fail-open SKIP (skip ≠ failure). Browser automation (Playwright) tools are discovered via ToolSearch at runtime and are never pre-attached in frontmatter — verifier's declared `tools` stay capped at `Read`/`Glob`/`Grep`/`Bash`, matching the sentinel-is-read-only-but-verifier-needs-Bash rationale in ARCH_DECISIONS.
+
+Added the `verify` skill (bilingual EN/CS triggers, routes to the verifier agent) and the clean-room `systematic-debugging` skill (4-phase root-cause protocol — reproduce, isolate, hypothesize, fix-and-confirm) now wired into craftsman's Error Recovery section and `/ralph` Step 3. Existing hard limits are unchanged by this addition: `STUCK_LIMIT=2`, `MAX_ITERATIONS=8`, and the max-2-attempt retry ceiling all still apply. `systematic-debugging` is attributed to obra/superpowers (MIT license).
+
+`plugin.json` bumped `2.3.0` → `2.4.0` to reflect the new agent and skills.

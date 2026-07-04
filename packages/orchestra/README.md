@@ -1,6 +1,6 @@
 # Orchestra — Multi-Agent Orchestration Plugin for Claude Code
 
-A native Claude Code plugin that replicates the multi-agent workflow from [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent). It provides a 3-layer architecture with 7 specialized agents, a staged pipeline with quality gates, file claiming, wisdom accumulation, and session persistence.
+A native Claude Code plugin that replicates the multi-agent workflow from [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent). It provides a 3-layer architecture with 8 specialized agents, a staged pipeline with quality gates, file claiming, wisdom accumulation, and session persistence.
 
 **Works fully standalone.** Cross-project graph memory is provided by the separate, optional companion plugin [`orchestra-memory`](../orchestra-memory/README.md). When it isn't installed, Orchestra falls back transparently to a legacy per-project `.claude/orchestra-wisdom.json` file — nothing breaks, nothing needs configuring.
 
@@ -221,19 +221,19 @@ Sentinel runs automatically via the deep-review skill.
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  PLANNING LAYER                      │
-│  scout (haiku) + scholar (haiku) + architect (opus)  │
-├─────────────────────────────────────────────────────┤
-│               ORCHESTRATION LAYER                    │
-│   conductor (inherit/opus) + executor (opus)         │
-├─────────────────────────────────────────────────────┤
-│                EXECUTION LAYER                       │
-│      craftsman (sonnet) + sentinel (sonnet)          │
-└─────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│                             PLANNING LAYER                             │
+│           scout (haiku) + scholar (haiku) + architect (opus)           │
+├───────────────────────────────────────────────────────────────────────┤
+│                          ORCHESTRATION LAYER                           │
+│               conductor (inherit/opus) + executor (opus)               │
+├───────────────────────────────────────────────────────────────────────┤
+│                            EXECUTION LAYER                             │
+│  craftsman (sonnet) + sentinel (sonnet) + verifier (sonnet, optional)  │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-### The 7 agents
+### The 8 agents
 
 | Agent | Model | oh-my-openagent counterpart | Role |
 |---|---|---|---|
@@ -242,6 +242,7 @@ Sentinel runs automatically via the deep-review skill.
 | **executor** | opus (green) | Atlas | Coordinator — file claiming, parallel dispatch, wisdom |
 | **craftsman** | sonnet (green) | Hephaestus | Worker — OWNS/MUST NOT MODIFY, explore → implement → verify |
 | **sentinel** | sonnet (red) | Momus | Reviewer — 80%+ confidence filtering, P0-P3, read-only; a structured checklist review doesn't need full opus |
+| **verifier** | sonnet (orange) | — | Optional E2E verifier — stage 6.5, Playwright MCP via ToolSearch, fail-open SKIP, read-only + Bash; never in the default pipeline |
 | **scout** | haiku (yellow) | Explore | Explorer — read-only, structured report |
 | **scholar** | haiku (magenta) | Librarian | Researcher — Context7, web, read-only |
 
@@ -260,6 +261,8 @@ Sentinel runs automatically via the deep-review skill.
       ↓ quality gate: all tasks done
 [Validation] → sentinel review (80%+ confidence)
       ↓ quality gate: no P0/P1
+[6.5 Verification] (optional — opt-in via --verify or conductor web-facing judgment; skipped by default)
+      ↓ gate: verifier PASS/PASS WITH NOTES or SKIP (skip is not a failure)
 [Fix Loop] → craftsman fixes → sentinel re-review (max 2 cycles)
       ↓
 [Completion] → extract wisdom, report
@@ -336,6 +339,8 @@ Triggers are bilingual (EN/CS) — each skill's frontmatter lists English phrase
 | **orchestrate** | "orchestrate"/"orchestruj", "multi-agent", "split up the work"/"rozděl práci", 3+ files cross-cutting |
 | **deep-plan** | "design"/"navrhni architekturu", "plan this"/"naplánuj", "design this", "migration strategy"/"migrační plán" |
 | **deep-review** | "review"/"zkontroluj", "check this"/"prověř", "audit", "security review" |
+| **verify** | "verify"/"ověř", "smoke test", "e2e"/"otestuj E2E", "run it and check"/"zkus jestli to funguje" |
+| **systematic-debugging** | "root cause"/"najdi příčinu", "debug systematically"/"debuguj systematicky", "why does this keep failing"/"proč to pořád padá" |
 | **skill-extract** | Post-workflow pattern extraction |
 
 ### Framework conventions
@@ -368,6 +373,7 @@ orchestra/
 │   ├── executor.md              # Coordinator with file claiming + wisdom
 │   ├── craftsman.md             # Worker with OWNS/MUST NOT MODIFY
 │   ├── sentinel.md              # Reviewer with confidence filtering (sonnet)
+│   ├── verifier.md              # E2E verifier — optional stage 6.5 (sonnet)
 │   ├── scout.md                 # Explorer (read-only)
 │   └── scholar.md                # Researcher (read-only, Context7 fallback)
 ├── commands/
@@ -385,6 +391,8 @@ orchestra/
 │   ├── orchestrate/SKILL.md      # Staged pipeline + scale decision
 │   ├── deep-plan/SKILL.md        # Planning with file ownership
 │   ├── deep-review/SKILL.md      # Review with confidence filtering
+│   ├── verify/SKILL.md           # Playwright MCP E2E verification (stage 6.5)
+│   ├── systematic-debugging/SKILL.md # Root-cause debugging methodology
 │   ├── skill-extract/SKILL.md    # Post-workflow pattern extraction
 │   └── memory-discipline/SKILL.md # Write-discipline for orchestra-memory (WHEN/HOW/SCOPE/anti-spam)
 ├── conventions/                  # Framework-specific rules — thin pointers
@@ -412,6 +420,8 @@ Adopts core concepts from:
 - [Specification-Driven Development](https://github.blog/ai-and-ml/generative-ai/multi-agent-workflows-often-fail-heres-how-to-engineer-ones-that-dont/) — preventing the 41.8% failure rate of vague specs
 - [Agent Farm](https://github.com/Dicklesworthstone/claude_code_agent_farm) — file-system coordination
 - [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) — staged pipeline pattern
+- [obra/superpowers](https://github.com/obra/superpowers) — systematic-debugging methodology (clean-room adaptation, MIT © 2025 Jesse Vincent)
+- [playwright-skill](https://github.com/lackeyjb/playwright-skill) — browser-driven E2E verification pattern
 
 ## License
 
