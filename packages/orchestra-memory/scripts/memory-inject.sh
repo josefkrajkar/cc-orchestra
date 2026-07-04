@@ -53,6 +53,15 @@ fi
 
 # project_id: sha256($PWD), first 16 hex chars — identical algorithm to the
 # boulder instance key computed in session-start.sh (ř. ~35).
+# === SHARED project_id CONTRACT — DO NOT CHANGE ===
+# project_id = first 16 hex chars of sha256(path + "\n"). The trailing
+# newline is load-bearing (echo/pwd both append it; TS computeProjectId
+# appends "\n" explicitly). This MUST stay byte-identical across:
+#   - orchestra-memory: memory-inject.sh, post-compact.sh
+#   - orchestra: session-start.sh (boulder instance key == graph project_id)
+#   - mcp-server/src/migrate.ts: computeProjectId()
+# Guarded by mcp-server/test/project-id-contract.test.ts. Never drop the newline.
+# ===================================================
 PROJECT_ID=$(pwd | shasum -a 256 2>/dev/null | cut -c1-16 || echo "")
 if [ -z "$PROJECT_ID" ]; then
   exit 0

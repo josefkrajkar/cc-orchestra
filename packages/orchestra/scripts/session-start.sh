@@ -33,6 +33,17 @@ WISDOM_FILE="$CWD/.claude/orchestra-wisdom.json"
 if [ -f "$BOULDER_FILE" ] && jq empty "$BOULDER_FILE" 2>/dev/null; then
   BOULDER_INSTANCE=$(jq -r '.instance // empty' "$BOULDER_FILE" 2>/dev/null || echo "")
   # Derive a stable instance key from cwd (sha256 of the path, first 16 chars)
+  # === SHARED project_id CONTRACT — DO NOT CHANGE ===
+  # project_id = first 16 hex chars of sha256(path + "\n"). The trailing
+  # newline is load-bearing (echo/pwd both append it; the TS computeProjectId
+  # helper appends "\n" explicitly). This boulder instance key MUST stay
+  # byte-identical to the graph project_id computed by the companion
+  # orchestra-memory plugin's session hooks and its TS computeProjectId(),
+  # so a project's boulder state and its graph memory share one identity.
+  # A cross-package contract test in orchestra-memory guards the invariant.
+  # Never drop the trailing newline. (Kept deliberately free of the memory
+  # package's internal path tokens so the "no cross-plugin path" guard stays clean.)
+  # ===================================================
   CWD_KEY=$(echo "$CWD" | shasum -a 256 2>/dev/null | cut -c1-16 || echo "")
 
   # Skip if boulder belongs to a different instance

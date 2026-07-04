@@ -75,11 +75,23 @@ function isoStamp(): string {
 }
 
 /**
+ * === SHARED project_id CONTRACT — DO NOT CHANGE ===
  * project_id = first 16 hex chars of sha256(--project-root + "\n"). The
  * trailing newline is intentional: the canonical derivation across the plugin
  * is `echo "$PWD" | shasum -a 256 | cut -c1-16` (session-start.sh, boulder,
  * memory-inject.sh), and `echo` appends "\n" to the hashed input. Facts
  * imported here must land under the same project_id the hooks compute.
+ *
+ * This formula MUST stay byte-identical across:
+ *   - orchestra-memory: scripts/memory-inject.sh, scripts/post-compact.sh
+ *   - orchestra: scripts/session-start.sh (boulder instance key == graph
+ *     project_id — the cross-package invariant)
+ *   - this function, computeProjectId()
+ *
+ * Guarded by mcp-server/test/project-id-contract.test.ts, which cross-checks
+ * this TS implementation against the actual bash one-liners. Never drop the
+ * newline — doing so silently fragments every user's memory graph.
+ * ===================================================
  */
 export function computeProjectId(projectRoot: string): string {
   return createHash('sha256').update(`${projectRoot}\n`).digest('hex').slice(0, 16);
