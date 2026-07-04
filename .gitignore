@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# SQLite graph-memory database + rotated backups (runtime state, lives in ~/.claude)
+*.db
+*.db-shm
+*.db-wal
+backups/
+
+# Runtime orchestration state / logs (NOT the .claude-plugin/ manifest dir)
+.claude/
+
+# OS cruft
+.DS_Store
+
+# NOTE: mcp-server/dist/ is intentionally COMMITTED (plugins ship the prebuilt
+# bundle; consumers do not run a build step). Do not add dist/ here.

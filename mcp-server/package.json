@@ -1,0 +1,26 @@
+{
+  "name": "orchestra-memory-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server (stdio) providing cross-project graph memory for the Orchestra plugin, backed by SQLite (node:sqlite) with FTS5.",
+  "type": "module",
+  "private": true,
+  "main": "dist/server.mjs",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.9"
+  }
+}
