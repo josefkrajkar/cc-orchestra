@@ -49,7 +49,8 @@ mistakes there are permanent unless you've taken your own backup first.
 ## Example: deploying `packages/orchestra`
 
 ```bash
-SRC=/Users/josefkrajkar/Desktop/projects/orchestra-plugin/packages/orchestra/
+REPO=/path/to/orchestra-plugin          # your local monorepo checkout
+SRC="$REPO/packages/orchestra/"
 DST=/path/to/marketplace-target/orchestra/
 
 # 1. Backup the target first (mandatory).
@@ -72,7 +73,8 @@ rsync -av \
 ## Example: deploying `packages/orchestra-memory`
 
 ```bash
-SRC=/Users/josefkrajkar/Desktop/projects/orchestra-plugin/packages/orchestra-memory/
+REPO=/path/to/orchestra-plugin          # your local monorepo checkout
+SRC="$REPO/packages/orchestra-memory/"
 DST=/path/to/marketplace-target/orchestra-memory/
 
 # 1. Backup the target first (mandatory).
