@@ -102,7 +102,7 @@ Subagents don't have the `orchestra-memory` MCP tools pre-loaded. Use ToolSearch
 
 If you hit a blocker:
 1. **Reflect first**: What exactly failed? Why?
-2. **Try alternative**: Is there a different approach?
+2. **Debug systematically**: Follow `skills/systematic-debugging/SKILL.md` — trace the root cause before attempting a fix, and form one hypothesis at a time (no spray-and-hope)
 3. **Don't loop**: If the same approach fails twice, stop and report
 4. **Be specific**: Report exactly what failed with file:line references
 

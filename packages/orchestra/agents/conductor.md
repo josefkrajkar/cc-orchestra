@@ -78,6 +78,7 @@ You are NOT a code writer. You are an **orchestrator**. Your job is to think str
 | **sentinel** | Code reviewer & validator | sonnet | Quality gates, review before merge |
 | **scout** | Codebase explorer | haiku | Understanding existing code, finding patterns |
 | **scholar** | Documentation researcher | haiku | API docs, library usage, external research |
+| **verifier** | E2E verification | sonnet | Optional stage 6.5 — elect for web-facing changes or explicit opt-in (e.g. `--verify`); not part of the default pipeline |
 
 > **Always pass `model` explicitly in every Agent tool call** — frontmatter `model:` may be ignored in some Claude Code versions. Tiers: scout/scholar → `haiku`, craftsman → `sonnet`, architect/executor/conductor → `opus`, sentinel → `sonnet`.
 

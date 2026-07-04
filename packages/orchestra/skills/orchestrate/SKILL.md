@@ -39,11 +39,15 @@ The full orchestration follows a staged pipeline with quality gates between each
      ↓ gate: all tasks complete, no crashes
 [6. Validation]
      ↓ gate: sentinel PASS or PASS WITH NOTES (no P0/P1)
+[6.5 Verification] (optional — opt-in or web-facing judgment; skipped by default)
+     ↓ gate: verifier PASS/PASS WITH NOTES or SKIP (skip is not a failure)
 [7. Fix Loop] (if needed, max 2 cycles)
      ↓ gate: sentinel re-validates fixes
 [8. Completion]
      → extract wisdom, report to user
 ```
+
+Stage 6.5 is not part of the default pipeline: it is dispatched only on explicit opt-in (e.g. `--verify`) or when the conductor judges the change web-facing, so a default run stays cost-neutral and never spawns the verifier. When elected, the verifier discovers Playwright browser MCP tools at runtime and produces PASS, PASS WITH NOTES, NEEDS CHANGES, or a first-class SKIP (not a failure) when nothing is runnable. Verifier P0/P1 findings feed the existing Fix Loop (stage 7, max 2 cycles — unchanged).
 
 **Every gate is a checkpoint.** If a gate fails, address the issue before proceeding. Never skip gates.
 
@@ -186,3 +190,5 @@ Wisdom survives context compaction (re-injected by PostCompact hook) and session
 3. **Post-Phase Gate:** All tasks in phase complete, tests pass
 4. **Post-Implementation Gate:** Sentinel review passes (no P0/P1 at 80%+ confidence)
 5. **Final Gate:** All tests pass, wisdom extracted, user informed
+
+**Optional gate (not part of the numbered list above):** if stage 6.5 Verification was elected (opt-in or web-facing judgment), the verifier must reach PASS/PASS WITH NOTES or SKIP before the Fix Loop/Final Gate proceed; SKIP is not a failure. Verifier P0/P1 findings route into the same max-2-cycle Fix Loop as sentinel's.

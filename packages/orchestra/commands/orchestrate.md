@@ -57,6 +57,19 @@ Before dispatching any craftsman, ensure a specification exists:
 - Sentinel reports with 80%+ confidence filtering
 - **Quality Gate**: Must pass with no P0/P1 issues
 
+### 6.5 Verification (optional)
+This stage is OPTIONAL and is NOT part of the default pipeline. The default pipeline excludes stage 6.5 — it is dispatched only on explicit opt-in or a conductor web-facing judgment, so the default `/orchestrate` run is cost-neutral (verifier is never spawned).
+
+It runs only when:
+- (a) explicit opt-in — e.g. a `--verify` flag or the user asks to verify/smoke-test, or
+- (b) the conductor judges the change web-facing
+
+When elected, spawn the **verifier** agent (pass `model: "sonnet"` explicitly in the Agent tool call — frontmatter `model:` may be ignored in some Claude Code versions).
+
+Verifier discovers Playwright browser MCP tools via ToolSearch at runtime; if nothing is runnable and no browser tools exist, it emits a SKIP — a SKIP is not a failure and does not block completion.
+
+Verifier P0/P1 findings re-enter the EXISTING Fix Loop (stage 7) — the max-2-fix-cycle limit is unchanged.
+
 ### 7. Fix Loop (if sentinel found issues)
 - Spawn craftsman for P0/P1 fixes
 - Re-run sentinel
@@ -77,3 +90,4 @@ Before dispatching any craftsman, ensure a specification exists:
 - Respect hard limits: max 5-8 parallel agents, max 2 retries
 - Keep the user informed between phases
 - Persist wisdom for future sessions
+- The default pipeline never dispatches verifier — stage 6.5 is opt-in only and cost-neutral by default

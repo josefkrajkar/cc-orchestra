@@ -48,7 +48,7 @@ When both conditions hold, skip remaining iterations and proceed directly to Ste
 ### Step 3: Error Handling
 When a task fails:
 1. **Reflect**: What exactly failed? Is it the same root cause as a previous failure?
-2. **Retry once**: Try an alternative approach
+2. **Retry once**: Run `skills/systematic-debugging/SKILL.md` to trace the root cause, then retry with the one fix that hypothesis implies (not a blind alternative approach)
 3. **Skip if still failing**: Mark as skipped, continue with next task
 4. **Feed errors forward**: If the error reveals something useful, pass it to next iteration
 
