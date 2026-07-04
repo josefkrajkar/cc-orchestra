@@ -2,7 +2,7 @@
 //   node dist/server.mjs --inject --project-id <key> [--budget <bytes>]
 //
 // No MCP handshake — this opens the DB directly and prints plain text to
-// stdout, then exits. Contract (see PLAN-graph-memory.md Fáze 3):
+// stdout, then exits. Contract (see docs/design/graph-memory-design.md Phase 3):
 //   1. project-scope valid facts for project_id (confidence desc, recency desc)
 //   2. top-K global facts
 //   3. private facts of THIS project only

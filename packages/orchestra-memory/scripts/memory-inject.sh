@@ -1,5 +1,5 @@
 #!/bin/bash
-# Orchestra Plugin — Graph Memory Injection (Fáze 3 of PLAN-graph-memory.md)
+# Orchestra Plugin — Graph Memory Injection (Phase 3 of the graph-memory design)
 #
 # Prints a token-dense graph-memory block (project facts + top-K global
 # facts + this project's private facts) to stdout for SessionStart context
@@ -35,7 +35,7 @@ if ! command -v node &>/dev/null; then
   exit 0
 fi
 
-# Fail-open: bundle not built/deployed (e.g. Fáze 0-2 not run yet).
+# Fail-open: bundle not built/deployed (e.g. Phase 0-2 not run yet).
 if [ ! -f "$SERVER_ENTRY" ]; then
   exit 0
 fi
@@ -52,7 +52,7 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
 fi
 
 # project_id: sha256($PWD), first 16 hex chars — identical algorithm to the
-# boulder instance key computed in session-start.sh (ř. ~35).
+# boulder instance key computed in session-start.sh (line ~35).
 # === SHARED project_id CONTRACT — DO NOT CHANGE ===
 # project_id = first 16 hex chars of sha256(path + "\n"). The trailing
 # newline is load-bearing (echo/pwd both append it; TS computeProjectId
@@ -68,7 +68,7 @@ if [ -z "$PROJECT_ID" ]; then
 fi
 
 # The --inject CLI is synchronous, local-DB-only (no network) and designed
-# to be fast (sub-100ms per PLAN-graph-memory.md Fáze 3). macOS ships no
+# to be fast (sub-100ms per docs/design/graph-memory-design.md Phase 3). macOS ships no
 # `timeout(1)` by default, so we deliberately do NOT wrap this call in a
 # background-kill harness — that would trade a real (small) risk for a lot
 # of fragility, for a call that is fast by design and already fails open

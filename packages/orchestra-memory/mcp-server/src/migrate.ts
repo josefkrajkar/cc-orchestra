@@ -3,7 +3,7 @@
 //   node dist/server.mjs --migrate [--commit] [--project-root <path>]
 //                                  [--wisdom <path>] [--memory-dir <path>]
 //
-// Design decision (see PLAN-graph-memory.md Fáze 7): v1 distillation is
+// Design decision (see docs/design/graph-memory-design.md Phase 7): v1 distillation is
 // performed by the CALLING LLM, not by code. This module therefore handles
 // ONLY the mechanical part:
 //   1. Importing `.claude/orchestra-wisdom.json` — entries there are already
@@ -158,7 +158,7 @@ export function parseFrontmatter(content: string): FrontmatterInfo {
 
 export type ScopeSuggestion = 'global' | 'project' | 'unknown';
 
-/** Scope heuristic from PLAN-graph-memory.md Fáze 7: frontmatter
+/** Scope heuristic from docs/design/graph-memory-design.md Phase 7: frontmatter
  * `type: user|feedback|reference` → global; `type: project` → project. */
 export function suggestScope(type: string | undefined): ScopeSuggestion {
   const t = type?.trim().toLowerCase();

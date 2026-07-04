@@ -26,7 +26,7 @@ if ! command -v node &>/dev/null; then
   exit 0
 fi
 
-# Fail-open: bundle not built/deployed (e.g. Fáze 0-2 not run yet).
+# Fail-open: bundle not built/deployed (e.g. Phase 0-2 not run yet).
 if [ ! -f "$SERVER_ENTRY" ]; then
   exit 0
 fi

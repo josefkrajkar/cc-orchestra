@@ -22818,8 +22818,32 @@ function computeOwnProjectId() {
     return null;
   }
 }
+var USAGE = `orchestra-memory MCP server / CLI
+
+Usage:
+  node dist/server.mjs
+      Start the MCP stdio server (default mode \u2014 no flags).
+
+  node dist/server.mjs --inject --project-id <id> [--budget <bytes>]
+      Print a token-dense memory block for SessionStart context injection
+      and exit. --budget defaults to 9500 bytes.
+
+  node dist/server.mjs --migrate [--commit] --project-root <path>
+      Migrate legacy wisdom JSON (.claude/orchestra-wisdom.json) into the
+      graph DB. Without --commit this is a dry run (nothing written).
+
+  node dist/server.mjs --backup [--keep <n>]
+      Rotate a daily snapshot of the graph.db backup. --keep defaults to 7.
+
+  node dist/server.mjs --help | -h
+      Show this usage summary and exit.
+`;
 async function main() {
   const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    process.stdout.write(USAGE);
+    return;
+  }
   if (argv.includes("--inject")) {
     runInject(argv);
     return;

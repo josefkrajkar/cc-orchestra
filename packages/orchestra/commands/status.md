@@ -23,7 +23,7 @@ Run `git status` and `git diff --stat` to understand what's been changed so far.
 
 ### Step 4: Check Graph Memory Health
 Locate `memory_stats` via ToolSearch (query like `select:memory_stats` or keyword `memory`) — it isn't pre-attached to commands. If found, call it and capture its one-block output (counts per scope, invalidated count, staleness >90 days, DB size) for the report below. If the tool can't be found via ToolSearch, or the call fails (MCP server not running, Node < 22.5, bundle missing), do not silently omit the section — surface a single visible line instead:
-`Graph memory: nedostupná (MCP server neběží nebo Node < 22.5 — spusť /memory-setup pro diagnostiku)`
+`Graph memory: unavailable (MCP server not running or Node < 22.5 — run /memory-setup to diagnose)`
 
 ### Step 5: Report
 

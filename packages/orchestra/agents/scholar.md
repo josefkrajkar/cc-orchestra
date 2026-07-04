@@ -5,8 +5,8 @@ description: |
 
   <example>
   Context: Need to understand how to use an unfamiliar library
-  user: "Jak se používá Drizzle ORM pro migrace?"
-  assistant: "Scholar prozkoumá dokumentaci Drizzle ORM a najde relevantní informace."
+  user: "How do you use Drizzle ORM for migrations?"
+  assistant: "Scholar will look through the Drizzle ORM documentation and find the relevant information."
   <commentary>
   Documentation lookup for an external library.
   </commentary>
@@ -14,8 +14,8 @@ description: |
 
   <example>
   Context: Need best practices for a specific pattern
-  user: "Jaké jsou best practices pro WebSocket reconnection?"
-  assistant: "Scholar provede research a shrne doporučené patterny."
+  user: "What are the best practices for WebSocket reconnection?"
+  assistant: "Scholar will do the research and summarize the recommended patterns."
   <commentary>
   Research task requiring external knowledge gathering.
   </commentary>

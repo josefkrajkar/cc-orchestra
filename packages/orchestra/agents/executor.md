@@ -5,8 +5,8 @@ description: |
 
   <example>
   Context: A plan has been created and needs execution
-  user: "Máme plán, teď ho implementuj"
-  assistant: "Executor převezme plán a koordinuje craftsmany pro paralelní implementaci."
+  user: "We have a plan, now implement it"
+  assistant: "Executor will take the plan and coordinate craftsmen for parallel implementation."
   <commentary>
   Plan exists, needs systematic execution with tracking.
   </commentary>
@@ -14,8 +14,8 @@ description: |
 
   <example>
   Context: Multiple independent tasks need parallel execution
-  user: "Implementuj frontend a backend současně"
-  assistant: "Executor spustí dva craftsmany paralelně — jeden na frontend, druhý na backend."
+  user: "Implement the frontend and backend simultaneously"
+  assistant: "Executor will launch two craftsmen in parallel — one for the frontend, one for the backend."
   <commentary>
   Independent work tracks that benefit from parallel execution.
   </commentary>

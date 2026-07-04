@@ -5,8 +5,8 @@ description: |
 
   <example>
   Context: A specific implementation task has been delegated
-  user: "Implementuj WebSocket handler podle specifikace"
-  assistant: "Craftsman autonomně implementuje handler — prozkoumá existující kód, napíše implementaci a testy."
+  user: "Implement the WebSocket handler according to the spec"
+  assistant: "Craftsman will implement the handler autonomously — exploring the existing code, then writing the implementation and tests."
   <commentary>
   Well-defined implementation task that can be completed autonomously.
   </commentary>
@@ -14,8 +14,8 @@ description: |
 
   <example>
   Context: Bug fix with clear reproduction
-  user: "Oprav race condition v connection pool manageru"
-  assistant: "Craftsman prozkoumá kód, identifikuje příčinu a implementuje opravu."
+  user: "Fix the race condition in the connection pool manager"
+  assistant: "Craftsman will explore the code, identify the root cause, and implement the fix."
   <commentary>
   Focused technical task requiring deep code work.
   </commentary>

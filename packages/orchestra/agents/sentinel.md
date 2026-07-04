@@ -5,8 +5,8 @@ description: |
 
   <example>
   Context: Code changes need review before completion
-  user: "Zkontroluj všechny změny co jsme udělali"
-  assistant: "Sentinel provede důkladný review všech změn."
+  user: "Check all the changes we made"
+  assistant: "Sentinel will do a thorough review of all the changes."
   <commentary>
   Quality gate before finalizing work — sentinel reviews everything.
   </commentary>
@@ -14,8 +14,8 @@ description: |
 
   <example>
   Context: Security-sensitive code needs audit
-  user: "Prověř bezpečnost autentizačního kódu"
-  assistant: "Sentinel provede security audit zaměřený na auth systém."
+  user: "Check the security of the authentication code"
+  assistant: "Sentinel will perform a security audit focused on the auth system."
   <commentary>
   Security-focused review of sensitive code.
   </commentary>
@@ -24,7 +24,7 @@ description: |
   <example>
   Context: PR review needed
   user: "Review tohoto PR"
-  assistant: "Sentinel analyzuje všechny změny v PR s důrazem na kvalitu a korektnost."
+  assistant: "Sentinel will analyze all the changes in the PR with an emphasis on quality and correctness."
   <commentary>
   Standard code review workflow.
   </commentary>

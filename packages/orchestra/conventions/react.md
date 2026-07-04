@@ -1,22 +1,22 @@
-# React Conventions — tenký ukazatel
+# React Conventions — thin pointer
 
-Pokud existuje `~/.claude/skills/react-conventions/`, načti jeho `SKILL.md` a `reference/review-checklist.md` — mají přednost před tímto souborem. Tento digest je offline fallback.
+If `~/.claude/skills/react-conventions/` exists, load its `SKILL.md` and `reference/review-checklist.md` — they take precedence over this file. This digest is the offline fallback.
 
 ---
 
-## P0 anti-patterns (vždy reportovat / odmítnout)
+## P0 anti-patterns (always report / reject)
 
-| # | Anti-pattern | Důvod |
+| # | Anti-pattern | Reason |
 |---|---|---|
-| 1 | `useEffect` na derived state | Zbytečný re-render; počítej přímo v render fázi |
-| 2 | `index` jako `key` u dynamických listů | Rozbíjí reconciliation při přidání / mazání / řazení |
-| 3 | `React.FC` / `React.FunctionComponent` | Zbytečný wrapper typu; piš plain function + inline typ |
-| 4 | Chybějící / nekompletní deps v `useEffect` | Stale closure, těžko debugovatelné bugy |
-| 5 | API klíče / secrets v Client Components | `'use client'` kód je viditelný v browseru |
-| 6 | `Math.random()` jako `key` | Nový klíč každý render = remount každý render |
-| 7 | Mutace state objektů / polí před `setState` | React nedetekuje změnu; stale UI |
-| 8 | Async `useEffect` bez cleanup | Memory leak, race condition |
-| 9 | `dangerouslySetInnerHTML` bez sanitizace | XSS |
-| 10 | Server Actions bez auth/authz checku | Nechráněná mutace dat |
-| 11 | Kombinace controlled + uncontrolled inputu | React varování, nepředvídatelný stav |
-| 12 | Class components (mimo error boundaries) | Legacy pattern; function components vždy |
+| 1 | `useEffect` on derived state | Unnecessary re-render; compute directly in the render phase |
+| 2 | `index` as `key` in dynamic lists | Breaks reconciliation on add / remove / reorder |
+| 3 | `React.FC` / `React.FunctionComponent` | Unnecessary type wrapper; write a plain function + inline type |
+| 4 | Missing / incomplete deps in `useEffect` | Stale closure, hard-to-debug bugs |
+| 5 | API keys / secrets in Client Components | `'use client'` code is visible in the browser |
+| 6 | `Math.random()` as `key` | New key on every render = remount on every render |
+| 7 | Mutating state objects/arrays before `setState` | React doesn't detect the change; stale UI |
+| 8 | Async `useEffect` without cleanup | Memory leak, race condition |
+| 9 | `dangerouslySetInnerHTML` without sanitization | XSS |
+| 10 | Server Actions without auth/authz check | Unprotected data mutation |
+| 11 | Combining controlled + uncontrolled input | React warning, unpredictable state |
+| 12 | Class components (except error boundaries) | Legacy pattern; always use function components |

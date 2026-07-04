@@ -101,7 +101,7 @@ Not publishing to npm for now. Kept for future reference:
 - [ ] **T4.3** Translate `commands/status.md:26` runtime string + the ~9 scattered command/skill trigger lines. — OWNS: `commands/status.md`, affected skills.
 - Parallelizable: 3–4 craftsmen on disjoint files (READMEs / agents / commands+skills).
 - Risk: translating trigger phrases changes agent invocation behavior. Mitigation: keep semantic intent; sentinel review; prose only, no functional edits.
-- Acceptance: `rg '[ěščřžýáíéúůňťď]' packages/` returns only intentional residue (e.g. archived `README.cs.md`).
+- Acceptance: a Czech-diacritics regex check over `packages/` returns only intentional residue (e.g. archived `README.cs.md`).
 
 ### Phase 5 — Public-release scaffolding (parallel after 1) — 1 day
 - [ ] **T5.1** Root `LICENSE` (chosen license) + per-package license reference. — OWNS: `LICENSE`.
@@ -111,7 +111,7 @@ Not publishing to npm for now. Kept for future reference:
 - [ ] **T5.5** Install-from-GitHub story: marketplace-add commands for both plugins (npm story deferred). — OWNS: README section.
 - [ ] **T5.6** Genericize `PLAN-graph-memory.md` personal paths (lines 6, 208); decide keep/translate/move to `docs/design/`. — OWNS: `PLAN-graph-memory.md`.
 - Parallelizable: yes, each task is a disjoint file.
-- Acceptance: CI passes on a clean checkout; `rg '/Users/josefkrajkar'` clean; uninstall doc removes all state.
+- Acceptance: CI passes on a clean checkout; a check for the literal personal home-directory path returns clean; uninstall doc removes all state.
 
 ### Phase 6 — Marketplace wiring (after 1/2) — 0.5 day
 - [ ] **T6.1** Update `orchestra-marketplace/.claude-plugin/marketplace.json`: two entries (`orchestra`, `orchestra-memory`). — OWNS: marketplace.json.

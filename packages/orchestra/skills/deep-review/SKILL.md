@@ -3,7 +3,7 @@ name: deep-review
 description: |
   Deep code review skill for thorough quality validation. Use when code changes need systematic review.
 
-  Trigger when the user says: "review", "zkontroluj", "prověř", "audit", "quality check", "security review", "code review", "podívej se na změny", "zkontroluj kód".
+  Trigger when the user says: "review", "check this", "inspect this", "audit", "quality check", "security review", "code review", "look at the changes", "check the code".
 
   Also trigger proactively when:
   - Significant code changes have been made and need validation

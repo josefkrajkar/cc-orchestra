@@ -5,8 +5,8 @@ description: |
 
   <example>
   Context: Need to understand a part of the codebase before making changes
-  user: "Jak funguje autentizace v tomhle projektu?"
-  assistant: "Scout prozkoumá autentizační systém a zmapuje všechny komponenty."
+  user: "How does authentication work in this project?"
+  assistant: "Scout will explore the authentication system and map out all its components."
   <commentary>
   Exploration task — understanding existing code before modification.
   </commentary>
@@ -14,8 +14,8 @@ description: |
 
   <example>
   Context: Need to find where something is implemented
-  user: "Najdi kde se zpracovávají webhooky"
-  assistant: "Scout prohledá codebase a najde všechny webhook handlery."
+  user: "Find where webhooks are processed"
+  assistant: "Scout will search the codebase and find all the webhook handlers."
   <commentary>
   Search and discovery task.
   </commentary>

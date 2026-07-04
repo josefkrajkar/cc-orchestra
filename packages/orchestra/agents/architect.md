@@ -5,8 +5,8 @@ description: |
 
   <example>
   Context: Complex feature needs design before coding
-  user: "Navrhni architekturu pro nový plugin systém"
-  assistant: "Architect provede analýzu požadavků a navrhne řešení."
+  user: "Design the architecture for a new plugin system"
+  assistant: "Architect will analyze the requirements and design a solution."
   <commentary>
   Architecture design task — needs thorough analysis before any code is written.
   </commentary>
@@ -14,8 +14,8 @@ description: |
 
   <example>
   Context: Large refactoring needs a phased plan
-  user: "Potřebuji plán migrace z REST na GraphQL"
-  assistant: "Architect vytvoří fázovaný migrační plán s risk analýzou."
+  user: "I need a plan for migrating from REST to GraphQL"
+  assistant: "Architect will create a phased migration plan with risk analysis."
   <commentary>
   Migration planning requires careful sequencing and risk assessment.
   </commentary>

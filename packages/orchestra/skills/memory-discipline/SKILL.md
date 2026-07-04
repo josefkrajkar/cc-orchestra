@@ -3,7 +3,7 @@ name: memory-discipline
 description: |
   Write-discipline skill for the orchestra-memory graph (memory_save, memory_link, memory_invalidate, memory_search, memory_inspect, memory_stats). Governs WHEN a fact is worth persisting, HOW to distill it correctly, which SCOPE (global/project/private) it belongs to, and how to keep the graph clean instead of spammy.
 
-  Trigger when: about to call memory_save or memory_link; the user gives a correction or stated preference ("dělej to takhle", "příště udělej X", "no, use Y instead"); a durable project decision is made; a gotcha is discovered the hard way; an approach is tried and fails (and the reason is worth remembering); end of an orchestrated workflow alongside skill-extract, when a reusable cross-project pattern emerged; deciding which scope a fact belongs in; auditing memory before writing to avoid near-duplicate entities.
+  Trigger when: about to call memory_save or memory_link; the user gives a correction or stated preference ("do it this way", "next time do X", "no, use Y instead"); a durable project decision is made; a gotcha is discovered the hard way; an approach is tried and fails (and the reason is worth remembering); end of an orchestrated workflow alongside skill-extract, when a reusable cross-project pattern emerged; deciding which scope a fact belongs in; auditing memory before writing to avoid near-duplicate entities.
 
   Also trigger when: a previously saved fact turns out to be wrong or superseded (→ memory_invalidate, or memory_save with supersedes_observation_id when replacing it), or before a large batch of saves (to apply the anti-spam rule).
 
@@ -19,7 +19,7 @@ This skill governs writes into the `orchestra-memory` MCP graph (cross-project, 
 
 Only persist facts that are:
 
-- **User corrections and stated preferences** — "dělej to takhle", "vždycky použij X", "no, don't do that" — durable behavioral instructions, not one-off task requests.
+- **User corrections and stated preferences** — "do it this way", "always use X", "no, don't do that" — durable behavioral instructions, not one-off task requests.
 - **Durable project decisions** — architectural choices with lasting impact ("used SQLite over Postgres because…"), not in-flight task state.
 - **Gotchas discovered the hard way** — traps that cost real debugging time and would trip up a future session or a different agent.
 - **Failed approaches, with why** — what was tried, why it didn't work, so it isn't retried. Without the "why" the fact isn't reusable — don't save the failure alone.
@@ -45,7 +45,7 @@ Additionally, reject:
 2. **Canonical entity names** — before introducing a new entity name, call `memory_search` (or `memory_inspect`) to check whether an equivalent entity already exists under a different name (e.g. "Josef" vs "Josef Krajkar"). Reuse the existing canonical name or register an alias instead of creating a near-duplicate node.
 3. **Relations as `memory_link` triples** — when a fact expresses a relationship between two entities ("X uses Y", "X prefers Y", "X decided Y"), express it as a `subject | predicate | object` triple via `memory_link`, not as prose buried inside an observation text.
 4. **One fact per item** — don't bundle multiple unrelated facts into a single observation; split them so each can be independently searched, invalidated, and superseded.
-5. **Convert relative dates to absolute** — "yesterday", "last week", "minulý týden" must become an explicit ISO-8601 date before saving. A future session reading the fact months later has no reference point for "yesterday".
+5. **Convert relative dates to absolute** — "yesterday", "last week", "last month" must become an explicit ISO-8601 date before saving. A future session reading the fact months later has no reference point for "yesterday".
 
 ## SCOPE selection rules
 

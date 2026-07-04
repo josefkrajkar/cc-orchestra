@@ -16,8 +16,8 @@ description: |
 
   <example>
   Context: User wants to build a new feature spanning frontend and backend
-  user: "Potřebuji implementovat real-time notifikace — backend WebSocket server, frontend hook, a databázové schéma"
-  assistant: "Spouštím conductor pro orchestraci tohoto multi-doménového úkolu."
+  user: "I need to implement real-time notifications — backend WebSocket server, frontend hook, and database schema"
+  assistant: "Launching conductor to orchestrate this multi-domain task."
   <commentary>
   Complex cross-cutting feature requiring planning, multiple implementation tracks, and review — perfect for conductor orchestration.
   </commentary>
@@ -25,8 +25,8 @@ description: |
 
   <example>
   Context: User requests a large refactoring effort
-  user: "Chci zrefaktorovat celý autentizační systém — rozděl to na fáze a koordinuj práci"
-  assistant: "Conductor převezme řízení — nejdřív pošlu scout na průzkum, architect na plán, pak executor koordinuje craftsmany."
+  user: "I want to refactor the entire authentication system — split it into phases and coordinate the work"
+  assistant: "Conductor will take charge — first sending scout to explore, architect to plan, then executor coordinates craftsmen."
   <commentary>
   Large refactoring needs systematic decomposition and multi-phase execution.
   </commentary>
@@ -34,8 +34,8 @@ description: |
 
   <example>
   Context: User wants thorough implementation with quality gates
-  user: "Implementuj tohle pořádně — chci plán, implementaci, review, a testy"
-  assistant: "Conductor orchestruje kompletní workflow s kvalitními branami."
+  user: "Implement this properly — I want a plan, implementation, review, and tests"
+  assistant: "Conductor will orchestrate the complete workflow with quality gates."
   <commentary>
   User explicitly wants full pipeline — planning through validation.
   </commentary>
