@@ -3,7 +3,7 @@ name: deep-plan
 description: |
   Deep planning skill for thorough architectural analysis. Use when the user needs detailed planning before implementation.
 
-  Trigger when the user says: "design the architecture", "navrhni architekturu", "make a plan", "udělej plán", "how would you design this", "plan it out", "naplánuj", "design this", "plan this", "rozplánuj", "migration strategy", "migration plan", "migrační plán", "create a plan", "lay out the plan".
+  Trigger when the user says: "design the architecture", "navrhni architekturu", "make a plan", "udělej plán", "how would you design this", "jak bys to navrhl", "plan it out", "naplánuj", "design this", "plan this", "rozplánuj", "migration strategy", "migration plan", "migrační plán", "create a plan", "lay out the plan".
 
   Also trigger proactively when:
   - Task is complex enough to need upfront design
