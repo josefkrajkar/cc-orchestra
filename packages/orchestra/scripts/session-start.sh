@@ -27,35 +27,6 @@ mkdir -p "$CWD/.claude"
 BOULDER_FILE="$CWD/.claude/orchestra-boulder.json"
 WISDOM_FILE="$CWD/.claude/orchestra-wisdom.json"
 
-# Graph memory injection (Fáze 3 of PLAN-graph-memory.md) — additive,
-# fail-open. scripts/memory-inject.sh owns the node/bundle/version guard
-# chain and prints nothing on any problem. Run cd'd into $CWD (subshell)
-# so its $PWD-derived project_id is computed from the SAME cwd the boulder
-# instance key below uses, not this hook script's own invocation dir.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MEMORY_INJECT_SCRIPT="$SCRIPT_DIR/memory-inject.sh"
-MEMORY_BLOCK=""
-if [ -f "$MEMORY_INJECT_SCRIPT" ]; then
-  MEMORY_BLOCK=$(cd "$CWD" && bash "$MEMORY_INJECT_SCRIPT" 2>/dev/null || true)
-fi
-
-# --- Daily graph.db backup (v2.2.0) — side effect only, additive -------
-# scripts/memory-backup.sh owns its own fail-open guard chain (node
-# missing/too old, bundle missing) and, per the --backup CLI contract,
-# never writes to stdout. stdout is discarded here too as belt-and-
-# suspenders: this MUST NEVER contribute to the hook's emitted JSON.
-MEMORY_BACKUP_SCRIPT="$SCRIPT_DIR/memory-backup.sh"
-if [ -f "$MEMORY_BACKUP_SCRIPT" ]; then
-  bash "$MEMORY_BACKUP_SCRIPT" >/dev/null 2>&1 || true
-fi
-# ------------------------------------------------------------------------
-
-MEMORY_HEADER_BLOCK=""
-if [ -n "$MEMORY_BLOCK" ]; then
-  MEMORY_HEADER_BLOCK="## Graph memory
-${MEMORY_BLOCK}"
-fi
-
 # Check for existing orchestration state (boulder system for session persistence)
 # R7: only announce the boulder when its instance field matches this instance
 # (derived from cwd) OR when instance is absent (legacy boulders always announce).
@@ -66,13 +37,9 @@ if [ -f "$BOULDER_FILE" ] && jq empty "$BOULDER_FILE" 2>/dev/null; then
 
   # Skip if boulder belongs to a different instance
   if [ -n "$BOULDER_INSTANCE" ] && [ -n "$CWD_KEY" ] && [ "$BOULDER_INSTANCE" != "$CWD_KEY" ]; then
-    if [ -n "$MEMORY_HEADER_BLOCK" ]; then
-      jq -n --arg msg "$MEMORY_HEADER_BLOCK" '{continue: true, suppressOutput: false, systemMessage: $msg}'
-    else
-      cat <<'ENDJSON'
+    cat <<'ENDJSON'
 {"continue": true, "suppressOutput": true}
 ENDJSON
-    fi
     exit 0
   fi
 
@@ -94,22 +61,11 @@ ENDJSON
 
   MSG="${MSG} Use /status to see full details or continue where you left off."
 
-  if [ -n "$MEMORY_HEADER_BLOCK" ]; then
-    FULL_MSG="${MSG}
-
-${MEMORY_HEADER_BLOCK}"
-    jq -n --arg msg "$FULL_MSG" '{continue: true, suppressOutput: false, systemMessage: $msg}'
-  else
-    jq -n --arg msg "$MSG" '{continue: true, suppressOutput: false, systemMessage: $msg}'
-  fi
+  jq -n --arg msg "$MSG" '{continue: true, suppressOutput: false, systemMessage: $msg}'
   exit 0
 fi
 
-# No existing state — silent (unless graph memory has something to add)
-if [ -n "$MEMORY_HEADER_BLOCK" ]; then
-  jq -n --arg msg "$MEMORY_HEADER_BLOCK" '{continue: true, suppressOutput: false, systemMessage: $msg}'
-else
-  cat <<'ENDJSON'
+# No existing state — silent
+cat <<'ENDJSON'
 {"continue": true, "suppressOutput": true}
 ENDJSON
-fi

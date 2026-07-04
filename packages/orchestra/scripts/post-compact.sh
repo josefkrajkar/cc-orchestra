@@ -86,29 +86,4 @@ if command -v git &>/dev/null && [ -d "$CWD/.git" ]; then
   MSG="${MSG} Git: branch ${BRANCH}, ${CHANGED_COUNT} files changed."
 fi
 
-# --- BEGIN Fáze 4: graph memory re-injection (additive, dual-mode alongside legacy wisdom JSON above) ---
-# Resolve the plugin root from this script's own location — do not depend on
-# CLAUDE_PLUGIN_ROOT being set (this must also work when the script is run
-# directly, e.g. in tests). Fail-open: missing node or missing dist bundle
-# silently skips this block, leaving the legacy wisdom re-injection above
-# untouched.
-POSTCOMPACT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" &>/dev/null && pwd)"
-MEMORY_PLUGIN_ROOT="$(dirname "$POSTCOMPACT_SCRIPT_DIR")"
-MEMORY_SERVER="$MEMORY_PLUGIN_ROOT/mcp-server/dist/server.mjs"
-
-if command -v node &>/dev/null && [ -f "$MEMORY_SERVER" ]; then
-  # Same instance-key derivation as session-start.sh (ř. 35): sha256 of cwd, first 16 hex chars.
-  MEMORY_PROJECT_ID=$(echo "$CWD" | shasum -a 256 2>/dev/null | cut -c1-16 || echo "")
-  if [ -n "$MEMORY_PROJECT_ID" ]; then
-    # Post-compact context is precious — smaller budget than SessionStart's 9500B default.
-    GRAPHMEM_RAW=$(node "$MEMORY_SERVER" --inject --project-id "$MEMORY_PROJECT_ID" --budget 4000 2>/dev/null || echo "")
-    if [ -n "$GRAPHMEM_RAW" ]; then
-      # No manual escaping needed here — the final payload below is built with
-      # `jq -n --arg`, which handles quoting/newlines/backslashes safely.
-      MSG="${MSG} ## Graph memory (post-compact): ${GRAPHMEM_RAW}"
-    fi
-  fi
-fi
-# --- END Fáze 4 ---
-
 jq -n --arg msg "$MSG" '{continue: true, suppressOutput: false, systemMessage: $msg}'

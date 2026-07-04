@@ -1,7 +1,7 @@
 {
   "name": "orchestra",
-  "version": "2.2.0",
-  "description": "Multi-agent orchestration plugin for Claude Code — inspired by oh-my-openagent's 3-layer architecture (planning, orchestration, execution) with specialized agents, wisdom accumulation, file claiming, quality gates, and a cross-project graph memory system (orchestra-memory).",
+  "version": "2.3.0",
+  "description": "Multi-agent orchestration plugin for Claude Code — inspired by oh-my-openagent's 3-layer architecture (planning, orchestration, execution) with specialized agents, wisdom accumulation, file claiming, and quality gates. Works fully standalone. Graph memory is provided by the separate optional companion plugin orchestra-memory; when it is not installed, orchestra falls back to the legacy .claude/orchestra-wisdom.json file for wisdom accumulation.",
   "author": {
     "name": "Josef Krajkar"
   },
