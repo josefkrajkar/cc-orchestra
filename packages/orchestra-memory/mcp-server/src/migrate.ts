@@ -467,6 +467,9 @@ export function runMigrate(argv: string[]): void {
     // Load-bearing despite the "unreachable" hint: tests mock process.exit as
     // a no-op, and without this return a dry-run would fall through into the
     // --commit path below.
+    // TS7027 (unreachable code) is expected here — both branches above call
+    // process.exit (typed `never`), so the type-checker sees this `return` as
+    // dead. It is intentional, not a mistake: do not remove it.
     return;
   }
 

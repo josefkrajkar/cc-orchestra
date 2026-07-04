@@ -24,9 +24,8 @@ Locate `mcp-server/dist/server.mjs` at runtime — `${CLAUDE_PLUGIN_ROOT}` is no
 ```bash
 SERVER=""
 for candidate in \
-  "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/mcp-server/dist/server.mjs" \
-  "$PWD/mcp-server/dist/server.mjs" \
-  "$PWD/orchestra-plugin/mcp-server/dist/server.mjs" \
+  "$(dirname "${CLAUDE_PLUGIN_ROOT:-$PWD}")/orchestra-memory/mcp-server/dist/server.mjs" \
+  "$PWD/packages/orchestra-memory/mcp-server/dist/server.mjs" \
   "$HOME"/.claude/plugins/*/orchestra*/mcp-server/dist/server.mjs \
   "$HOME"/.claude/plugins/marketplaces/*/orchestra*/mcp-server/dist/server.mjs; do
   if [ -f "$candidate" ]; then SERVER="$candidate"; break; fi

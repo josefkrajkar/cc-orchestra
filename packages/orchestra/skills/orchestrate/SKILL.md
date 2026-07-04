@@ -3,7 +3,7 @@ name: orchestrate
 description: |
   Multi-agent orchestration skill. Use when the user needs complex, multi-step work that benefits from specialized agent coordination.
 
-  Trigger when the user says: "orchestrate", "coordinate agents", "multi-agent", "split the work", "split into phases", "full pipeline", "plan + implementation + review".
+  Trigger when the user says: "orchestrate", "orchestruj", "coordinate agents", "koordinuj agenty", "multi-agent", "split the work", "rozděl práci", "split into phases", "rozděl na fáze", "full pipeline", "plan + implementation + review".
 
   Also trigger proactively when:
   - Task touches 3+ files across different concerns (frontend + backend + DB)

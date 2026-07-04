@@ -3,7 +3,7 @@ name: skill-extract
 description: |
   Persistent skill extraction skill. After completing a significant workflow, extracts reusable patterns, conventions, and architectural decisions into project-level skill files. Activates automatically at the end of orchestrated workflows.
 
-  Trigger when: workflow is complete and produced useful patterns, user says "extract skills", "save patterns", "save conventions", "persist learnings".
+  Trigger when: workflow is complete and produced useful patterns, user says "extract skills", "save patterns", "save conventions", "persist learnings", "ulož patterny".
 
   Do NOT trigger for: trivial tasks, mid-workflow, when user explicitly declines.
 version: 1.0.0

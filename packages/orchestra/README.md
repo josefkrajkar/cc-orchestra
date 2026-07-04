@@ -329,11 +329,13 @@ For the server's own architecture — SQLite storage, scoping rules, temporal va
 
 ### Skills (automatic activation)
 
+Triggers are bilingual (EN/CS) — each skill's frontmatter lists English phrases alongside their Czech equivalents (e.g. "orchestrate"/"orchestruj", "review"/"zkontroluj") so activation works the same regardless of which language the user is speaking. The table below shows a representative sample; see each `SKILL.md` frontmatter for the full list.
+
 | Skill | Trigger |
 |---|---|
-| **orchestrate** | "orchestrate", "multi-agent", "split up the work", 3+ files cross-cutting |
-| **deep-plan** | "design", "plan this", "design this", "migration strategy" |
-| **deep-review** | "review", "check this", "audit", "security review" |
+| **orchestrate** | "orchestrate"/"orchestruj", "multi-agent", "split up the work"/"rozděl práci", 3+ files cross-cutting |
+| **deep-plan** | "design"/"navrhni architekturu", "plan this"/"naplánuj", "design this", "migration strategy"/"migrační plán" |
+| **deep-review** | "review"/"zkontroluj", "check this"/"prověř", "audit", "security review" |
 | **skill-extract** | Post-workflow pattern extraction |
 
 ### Framework conventions

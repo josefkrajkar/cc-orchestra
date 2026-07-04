@@ -3,7 +3,7 @@ name: memory-discipline
 description: |
   Write-discipline skill for the orchestra-memory graph (memory_save, memory_link, memory_invalidate, memory_search, memory_inspect, memory_stats). Governs WHEN a fact is worth persisting, HOW to distill it correctly, which SCOPE (global/project/private) it belongs to, and how to keep the graph clean instead of spammy.
 
-  Trigger when: about to call memory_save or memory_link; the user gives a correction or stated preference ("do it this way", "next time do X", "no, use Y instead"); a durable project decision is made; a gotcha is discovered the hard way; an approach is tried and fails (and the reason is worth remembering); end of an orchestrated workflow alongside skill-extract, when a reusable cross-project pattern emerged; deciding which scope a fact belongs in; auditing memory before writing to avoid near-duplicate entities.
+  Trigger when: about to call memory_save or memory_link; the user gives a correction or stated preference ("do it this way", "dělej to takhle", "next time do X", "příště udělej X", "no, use Y instead"); a durable project decision is made; a gotcha is discovered the hard way; an approach is tried and fails (and the reason is worth remembering); end of an orchestrated workflow alongside skill-extract, when a reusable cross-project pattern emerged; deciding which scope a fact belongs in; auditing memory before writing to avoid near-duplicate entities.
 
   Also trigger when: a previously saved fact turns out to be wrong or superseded (→ memory_invalidate, or memory_save with supersedes_observation_id when replacing it), or before a large batch of saves (to apply the anti-spam rule).
 
