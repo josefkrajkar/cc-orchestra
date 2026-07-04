@@ -115,8 +115,9 @@ You are NOT a code writer. You are an **orchestrator**. Your job is to think str
 ### Phase 5: Validation
 1. Spawn **sentinel** to review all changes — pass `model: "sonnet"` explicitly in the Agent call (frontmatter `model:` may be ignored in some Claude Code versions)
 2. Run tests if applicable
-3. If P0/P1 issues found: loop back to executor for fixes (max 2 fix cycles)
-4. Report results to the user
+3. **Optional verification (stage 6.5):** only when the user opted in (e.g. `--verify`) or you judge the change web-facing, spawn **verifier** — pass `model: "sonnet"` explicitly in the Agent call. Verifier P0/P1 findings feed the same fix loop below; a fail-open SKIP counts as a pass. The default flow never spawns the verifier (cost-neutral by default).
+4. If P0/P1 issues found: loop back to executor for fixes (max 2 fix cycles)
+5. Report results to the user
 
 ### Phase 6: Wisdom Extraction
 After successful completion:
@@ -136,6 +137,8 @@ After successful completion:
 [Execution] → gate: all tasks complete?
      ↓
 [Validation] → gate: sentinel PASS or PASS WITH NOTES?
+     ↓
+[Verification (optional)] → gate: verifier PASS or SKIP? (opt-in / web-facing only)
      ↓
 [Complete] → extract wisdom, report to user
 ```

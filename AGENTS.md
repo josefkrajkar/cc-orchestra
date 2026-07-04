@@ -12,16 +12,16 @@ This repo is a two-package monorepo, each package a standalone Claude Code plugi
 ## Agent Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                PLANNING LAYER                    │
-│  scout (haiku) + scholar (haiku) + architect (opus) │
-├─────────────────────────────────────────────────┤
-│              ORCHESTRATION LAYER                 │
-│     conductor (inherit/opus) + executor (opus)   │
-├─────────────────────────────────────────────────┤
-│               EXECUTION LAYER                    │
-│     craftsman (sonnet) + sentinel (sonnet) + verifier (sonnet, optional)     │
-└─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                             PLANNING LAYER                             │
+│           scout (haiku) + scholar (haiku) + architect (opus)           │
+├────────────────────────────────────────────────────────────────────────┤
+│                          ORCHESTRATION LAYER                           │
+│               conductor (inherit/opus) + executor (opus)               │
+├────────────────────────────────────────────────────────────────────────┤
+│                            EXECUTION LAYER                             │
+│  craftsman (sonnet) + sentinel (sonnet) + verifier (sonnet, optional)  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Model Tiering
@@ -141,6 +141,6 @@ Summary of all changes from the R1–R10 upgrade batch:
 
 Added the optional end-to-end **verifier** agent — the plugin's 8th agent (sonnet, orange, Execution layer alongside craftsman + sentinel) — as pipeline stage 6.5. It is opt-in only, triggered via `--verify` or conductor's web-facing judgment; the default pipeline never dispatches it, so default `/orchestrate` cost and behavior are unchanged. Verifier findings rated P0/P1 feed into the existing max-2-cycle fix loop unchanged; anything below that, or an environment where verification can't run, resolves to a fail-open SKIP (skip ≠ failure). Browser automation (Playwright) tools are discovered via ToolSearch at runtime and are never pre-attached in frontmatter — verifier's declared `tools` stay capped at `Read`/`Glob`/`Grep`/`Bash`, matching the sentinel-is-read-only-but-verifier-needs-Bash rationale in ARCH_DECISIONS.
 
-Added the `verify` skill (bilingual EN/CS triggers, routes to the verifier agent) and the clean-room `systematic-debugging` skill (4-phase root-cause protocol — reproduce, isolate, hypothesize, fix-and-confirm) now wired into craftsman's Error Recovery section and `/ralph` Step 3. Existing hard limits are unchanged by this addition: `STUCK_LIMIT=2`, `MAX_ITERATIONS=8`, and the max-2-attempt retry ceiling all still apply. `systematic-debugging` is attributed to obra/superpowers (MIT license).
+Added the `verify` skill (bilingual EN/CS triggers, routes to the verifier agent) and the clean-room `systematic-debugging` skill (4-phase root-cause protocol — trace the root cause, analyze related systems, form one hypothesis, test that one fix) now wired into craftsman's Error Recovery section and `/ralph` Step 3. Existing hard limits are unchanged by this addition: `STUCK_LIMIT=2`, `MAX_ITERATIONS=8`, and the max-2-attempt retry ceiling all still apply. `systematic-debugging` is attributed to obra/superpowers (MIT license).
 
 `plugin.json` bumped `2.3.0` → `2.4.0` to reflect the new agent and skills.
