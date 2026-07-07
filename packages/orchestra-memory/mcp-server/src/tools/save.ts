@@ -13,51 +13,27 @@ import {
   type SaveSummary,
 } from '../render.js';
 import { privateDeniedMessage, resolveProjectId, type ToolContext } from './context.js';
+import { DISTILL_NOTE, SCOPE_NOTE } from './descriptions.js';
 
 export const name = 'memory_save';
 
 export const description = `Persist distilled facts and relations into the cross-project graph memory.
 
-YOU (the calling model) must distill BEFORE calling this tool — never pass raw conversation
-text through unmodified:
-- Each fact's "text" MUST be an atomic, self-contained proposition: a complete sentence that
-  stands on its own without the surrounding conversation. NEVER use pronouns or references that
-  only make sense in context ("it", "this", "the above", "he" meaning someone mentioned
-  earlier) — always name the subject explicitly.
-- One fact per array entry. If a sentence expresses two independent facts, split it into two
-  entries.
-- "entity.name" MUST be the canonical name of the real-world thing the fact is about (e.g.
-  "Josef Krajkar", not "he"; "Orchestra plugin", not "this project" or "the repo"). Reuse the
-  exact same canonical name every time you refer to the same entity so facts merge onto one
-  graph node instead of fragmenting into near-duplicate entities.
-- Use "relations" for structural triples between two entities: {src, predicate, dst}, e.g.
-  {src: "Orchestra plugin", predicate: "uses", dst: "SQLite"}. Prefer a relation over prose when
-  a triple captures the fact better.
-- "scope" applies to the whole call and defaults to "project" when omitted. Use "global" only
-  for facts true across ALL projects (e.g. a durable user preference). Use "private" for
-  sensitive, client-specific facts that must NEVER leak into other projects. "project" and
-  "private" scope both use project_id — omit it to write to your own project (this server
-  instance's identity); passing a DIFFERENT project's id is rejected outright, so there is no
-  way to write into another project's project/private scope through this tool.
-- "category" (convention|gotcha|decision|failed_approach|preference|fact) helps downstream
-  tools like wisdom_get group facts; set it when the fact fits one of those categories.
-- To correct or update a fact that is no longer true, do NOT just save a new, unrelated
-  observation next to the old one: first call memory_search (or memory_inspect) to find the old
-  fact's "#<id>" (rendered as a prefix on every observation line), then save the replacement
-  fact with that id in "supersedes_observation_id". This atomically marks the old observation
-  invalidated+superseded (it stops appearing in memory_search/memory_traverse, though
-  memory_inspect still shows the history) and links it to the new one. The old observation must
-  exist, still be valid (not already invalidated/superseded), and be visible to your own project
-  (global, or the same project_id as this save) — otherwise the fact is rejected rather than
-  silently saved without the supersession.
+Distill BEFORE calling — never pass raw text unmodified. ${DISTILL_NOTE} One fact per entry;
+reuse the exact "entity.name" (e.g. "Josef Krajkar", not "he") every time so facts merge onto
+one node. "relations" are structural triples ({src, predicate, dst}) — prefer one over prose.
 
-Server-side validation rejects: facts with no entity name, empty/whitespace-only text, text over
-500 characters (not atomic — split it into multiple facts), and an invalid/inaccessible
-supersedes_observation_id. Before inserting, the server compares each fact's normalized text
-against the target entity's existing valid observations; an exact-normalized match is reported
-as a duplicate and skipped rather than re-inserted. The response reports a per-fact outcome
-(saved [+ superseded #N] | duplicate | rejected: reason) plus summary counts and the IDs of
-newly created observations — read it to confirm what was actually written.`;
+${SCOPE_NOTE} "scope" defaults to "project". "category"
+(convention|gotcha|decision|failed_approach|preference|fact) helps wisdom_get group results.
+
+To correct an outdated fact, pass its "#<id>" as "supersedes_observation_id" — invalidates the
+old observation and links it to the new one; the target must exist, be valid, and visible to
+your project, else the save is rejected.
+
+Also rejected: missing entity name, empty text. An exact-normalized duplicate is skipped, not
+re-inserted. A high-similarity ("near-duplicate") fact is also skipped unless you pass
+"allow_near_duplicate":true or supersede it instead. Response reports a per-fact outcome (saved
+[+ superseded #N] | duplicate | near_duplicate | rejected: reason) and new ids.`;
 
 const entityShape = z.object({
   name: z.string(),
@@ -86,6 +62,9 @@ export const inputShape = {
   project_id: z.string().optional(),
   project_label: z.string().optional(),
   source: z.string().optional(),
+  // Bypasses the near-duplicate guard (see findNearDuplicate below) for every
+  // fact in this call — use when a high-similarity match is a false positive.
+  allow_near_duplicate: z.boolean().optional(),
 };
 
 const inputSchema = z.object(inputShape);
@@ -107,6 +86,163 @@ function rejectedResult(error: string): SaveOutput {
     relations: [],
     error,
   };
+}
+
+// --- Near-duplicate guard (D8) -------------------------------------------
+//
+// SQLite FTS5's default MATCH semantics AND every whitespace-delimited term
+// together (see db/repository.ts's sanitizeFtsQuery, which quotes each
+// token as its own phrase — bare quoted phrases are implicitly AND-ed).
+// That means calling repo.searchObservations() with a fact's full raw text
+// as the query requires a candidate to contain literally *every* word of
+// that text. Empirically (scratch experiment against two real-world
+// duplicate pairs pulled from this project's own memory — a
+// project_id/sha256 formula note and a process.exit()/vitest-mock note) a
+// literal full-text query returns zero candidates for either pair, in
+// either direction: real paraphrases never share 100% of their vocabulary.
+//
+// To make the guard actually useful without touching the frozen
+// repository, the query fed to searchObservations is built from a handful
+// of the fact's "anchor" words instead of its full text: significant
+// (non-stopword, length >= MIN_TOKEN_LEN) words that already occur in at
+// least one existing valid/visible observation, preferring the rarest
+// ones. AND-ing just those few — relaxing down to fewer anchors if the
+// full set doesn't co-occur in a single candidate — reliably surfaces
+// same-topic restatements while still requiring several specific words to
+// coincide, which keeps unrelated facts from colliding by chance.
+const MIN_TOKEN_LEN = 4;
+const CANDIDATE_WORD_CAP = 20;
+const MIN_ANCHOR_WORDS = 3;
+const MAX_ANCHOR_WORDS = 6;
+const ANCHOR_DF_SEARCH_LIMIT = 50;
+
+/**
+ * BM25 rank threshold (SQLite returns bm25() as a "rank": negative, lower
+ * is a stronger match). Empirical basis — anchor-word AND-queries (as
+ * described above) against the two mandated real-world duplicate pairs:
+ *   - "project_id = sha256(path+trailing newline) truncated to 16 hex"
+ *     note vs its restatement: rank -6.18 one direction, -3.73 the other.
+ *   - "process.exit()/vitest mock, don't remove the return" note vs its
+ *     restatement: rank -4.20 (one direction only — the other direction's
+ *     anchor set didn't converge on the same candidate, which is the
+ *     accepted miss for this more heavily paraphrased pair).
+ *   - Two additional constructed near-dup pairs (SQLite/FTS5 restatement,
+ *     REST->GraphQL migration restatement) scored -11.8 to -12.1.
+ *   - Every coincidental-overlap control tried (facts sharing 2-3 generic
+ *     words by chance, e.g. two unrelated "TypeScript ... project ...
+ *     testing" sentences) never even reached this rank check — the anchor
+ *     selection above already rejected it for having too few candidates
+ *     that share a common document.
+ * -3.5 sits just above (less strict than) the weakest true positive
+ * observed (-3.73), so ordinary corpus-composition variance in a real
+ * graph.db doesn't flip that case into a miss, while remaining far
+ * stricter than a typical single/double-anchor incidental score.
+ *
+ * Corpus-size caveat: BM25's IDF term is a function of how many documents
+ * in the corpus contain each word, so its magnitude shrinks toward zero as
+ * the corpus shrinks — with exactly one prior observation to compare
+ * against, even a perfect anchor match scores roughly -0.000006, nowhere
+ * near this threshold. All the empirical numbers above (and this guard's
+ * behavior generally) assume a corpus with some pre-existing topical
+ * diversity, which is the realistic case once a project has accumulated
+ * more than a couple of facts. In a brand-new/near-empty project this
+ * guard is correspondingly weaker — an acceptable false negative under the
+ * fail-open philosophy, not a correctness bug.
+ */
+export const NEAR_DUP_RANK_THRESHOLD = -3.5;
+
+// A deliberately small, generic English stopword list — just enough to keep
+// filler/connective words out of the anchor pool. Not exhaustive; false
+// negatives here only make the guard slightly less effective, never unsafe.
+const STOPWORDS = new Set(
+  `a an the and or but if then else for nor so yet
+   of to in on at by with from into onto up down out over under again further
+   is are was were be been being have has had do does did doing will would
+   shall should may might must can could this that these those it its
+   as not no never always about above below between through during before
+   after once here there when where why how all any both each few more most
+   other some such only own same than too very just also across still
+   i you he she we they them his her our your their what which who whom
+   because while against without within per via etc used use uses using`
+    .split(/\s+/)
+    .filter(Boolean)
+);
+
+/** Extracts unique, lowercased, stopword/short-word-filtered tokens from
+ * free text, in first-seen order, capped at CANDIDATE_WORD_CAP to bound the
+ * document-frequency lookups below. */
+function significantWords(text: string): string[] {
+  const seen = new Set<string>();
+  const words: string[] = [];
+  for (const match of text.toLowerCase().matchAll(/[a-z0-9]+/g)) {
+    const word = match[0];
+    if (word.length < MIN_TOKEN_LEN || STOPWORDS.has(word) || seen.has(word)) continue;
+    seen.add(word);
+    words.push(word);
+    if (words.length >= CANDIDATE_WORD_CAP) break;
+  }
+  return words;
+}
+
+interface NearDupMatch {
+  observationId: number;
+  rank: number;
+}
+
+/**
+ * Looks for an existing near-duplicate of `text` among valid (not
+ * invalidated), caller-visible observations in `scope`/`projectId` —
+ * visibility and validity are enforced by repo.searchObservations() itself
+ * (its scopeGuard/scopeAllowlist and default `includeInvalidated: false`),
+ * never re-implemented here. This is a best-effort heuristic, not a
+ * security boundary: it fails open on any error (including a pathological
+ * MATCH failure on unusual fact text) by returning null, so a previously-
+ * valid save can never be blocked by this check misbehaving.
+ */
+function findNearDuplicate(
+  repo: Repository,
+  text: string,
+  scope: Scope,
+  projectId: string | null
+): NearDupMatch | null {
+  try {
+    const words = significantWords(text);
+    if (words.length < MIN_ANCHOR_WORDS) return null;
+
+    const scored = words.map((word, index) => ({
+      word,
+      index,
+      // Document-frequency proxy: how many existing valid/visible
+      // observations already contain this word. A word with df=0 can never
+      // contribute to a match and is dropped before ranking.
+      df: repo.searchObservations({ query: word, scopes: [scope], projectId, limit: ANCHOR_DF_SEARCH_LIMIT })
+        .length,
+    }));
+    const candidates = scored.filter((c) => c.df > 0);
+    if (candidates.length < MIN_ANCHOR_WORDS) return null;
+
+    // Rarest (lowest df) words first; longer words as a specificity
+    // tiebreak; original position as a final stable tiebreak.
+    candidates.sort((a, b) => a.df - b.df || b.word.length - a.word.length || a.index - b.index);
+    const pool = candidates.slice(0, MAX_ANCHOR_WORDS).map((c) => c.word);
+
+    // The full anchor pool may not all co-occur in one candidate (an anchor
+    // can have df>0 only because it matches a *different*, unrelated
+    // observation) — relax by shrinking from the least-confident end until
+    // a match is found or the floor (MIN_ANCHOR_WORDS) is hit.
+    for (let size = pool.length; size >= MIN_ANCHOR_WORDS; size--) {
+      const query = pool.slice(0, size).join(' ');
+      const rows = repo.searchObservations({ query, scopes: [scope], projectId, limit: 5 });
+      const best = rows[0];
+      if (best) {
+        return { observationId: best.observationId, rank: best.rank };
+      }
+    }
+    return null;
+  } catch {
+    // Fail open — see function doc comment.
+    return null;
+  }
 }
 
 interface SupersedeTarget {
@@ -231,6 +367,22 @@ export function handleSave(
       continue;
     }
 
+    // Near-duplicate guard: skipped entirely when supersedes_observation_id
+    // is set (supersession is the intended, explicit dedup flow) or when the
+    // caller opted in via allow_near_duplicate:true.
+    if (supersedesId == null && input.allow_near_duplicate !== true) {
+      const nearDup = findNearDuplicate(repo, fact.text, scope, projectId);
+      if (nearDup && nearDup.rank <= NEAR_DUP_RANK_THRESHOLD) {
+        factOutcomes.push({
+          entity: fact.entity.name,
+          status: 'near_duplicate',
+          observationId: nearDup.observationId,
+          nodeId: nodeResult.id,
+        });
+        continue;
+      }
+    }
+
     const observationId = repo.addObservation({
       nodeId: nodeResult.id,
       text: fact.text.trim(),
@@ -289,6 +441,7 @@ export function handleSave(
   const summary: SaveSummary = {
     saved: factOutcomes.filter((f) => f.status === 'saved').length,
     duplicate: factOutcomes.filter((f) => f.status === 'duplicate').length,
+    nearDuplicate: factOutcomes.filter((f) => f.status === 'near_duplicate').length,
     rejected: factOutcomes.filter((f) => f.status === 'rejected').length,
     relations: relationOutcomes.length,
   };

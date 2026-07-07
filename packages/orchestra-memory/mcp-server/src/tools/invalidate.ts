@@ -5,24 +5,19 @@ import type { SqliteDatabase } from '../db/connection.js';
 import type { Repository } from '../db/repository.js';
 import { resolveProjectId, type ToolContext } from './context.js';
 import { resolveEntityNode } from './traverse.js';
+import { SCOPE_NOTE } from './descriptions.js';
 
 export const name = 'memory_invalidate';
 
-export const description = `Retire facts that are no longer true (supersede/forget), soft-deleting by default.
+export const description = `Retire facts that are no longer true, soft-deleting by default.
 
-Pass exactly one of:
-- "observation_id" — invalidate a single observation returned earlier by memory_search /
-  memory_inspect / memory_save. Rejected if that observation belongs to a project other than
-  your own (global observations are always eligible).
-- "entity" — invalidate every currently-valid observation attached to that entity (resolved by
-  canonical name or alias, same lookup as memory_traverse; project_id defaults to your own
-  project — a different project's id is rejected).
+Pass exactly one of: "observation_id" (a single #id from earlier results; another project's
+observation is rejected, global is always eligible) or "entity" (every valid observation of that
+entity, resolved by canonical name or alias). ${SCOPE_NOTE}
 
-By default this is a SOFT delete: sets invalidated_at so memory_search/memory_traverse stop
-surfacing the fact, but memory_inspect can still show its history. Pass hard:true only when you
-need a genuine, irreversible delete (e.g. data entered in error) — prefer soft delete when a
-fact merely became outdated, since that preserves an audit trail. "reason" is recorded in the
-tool's response for traceability (not persisted on the row today).`;
+Soft delete (default) sets invalidated_at — search/traverse stop surfacing the fact, but
+memory_inspect keeps the history. Pass hard:true only for genuine irreversible deletes (data
+entered in error); prefer soft to preserve the audit trail. "reason" is echoed for traceability.`;
 
 export const inputShape = {
   observation_id: z.number().int().positive().optional(),

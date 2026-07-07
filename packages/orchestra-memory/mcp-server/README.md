@@ -47,7 +47,7 @@ Output: `dist/server.mjs` + `dist/server.mjs.map` + `dist/schema.sql`. These thr
 ## Test
 
 ```bash
-npm test        # vitest run — 42 tests across repository/tools/migrate/backup
+npm test        # vitest run — 61 tests across repository/tools/migrate/backup/inject-index
 npm run test:watch
 ```
 
@@ -144,7 +144,9 @@ The two CLI modes (`--inject`, `--migrate`) are exempt from this check: they rec
 | `wisdom_get` | Read wrapper over the graph filtered to wisdom categories (convention/gotcha/decision/failed_approach); includes `global` + your own project's `project` **and** `private` facts, for backward compatibility with `/wisdom show`. |
 | `wisdom_add` | Write wrapper over `memory_save` with a forced category. `scope` defaults to `project` (your own project) — pass `scope: "global"` as an explicit opt-in to share wisdom across every project, or `scope: "private"` for client-confidential wisdom, for backward compatibility with `/wisdom add`. |
 
-Full parameter shapes are defined as Zod schemas next to each handler in `src/tools/*.ts` and are also surfaced to the calling model via each tool's MCP `description`. These tools are discoverable through Claude Code's ToolSearch by any agent, in any plugin — you don't need commands from this package to use them; `wisdom_get`/`wisdom_add`/`/wisdom` are a convenience layer provided by the companion `orchestra` package, not a requirement.
+Full parameter shapes are defined as Zod schemas next to each handler in `src/tools/*.ts` and are also surfaced to the calling model via each tool's MCP `description`. Shared prose fragments used across those descriptions (the `project_id`/scope trust boundary, the write-discipline summary, the output line shape) live in `src/tools/descriptions.ts` — each tool's exported `description` interpolates them so it stays a fully self-contained string, while avoiding retyping the same paragraph in every file. These tools are discoverable through Claude Code's ToolSearch by any agent, in any plugin — you don't need commands from this package to use them; `wisdom_get`/`wisdom_add`/`/wisdom` are a convenience layer provided by the companion `orchestra` package, not a requirement.
+
+Tool descriptions are intentionally terse — they give the calling model just enough to self-correct at call time (validation rules, unique mechanics like `supersedes_observation_id`). The full write-discipline contract (when to save, the distillation checklist, scope selection, anti-spam guidance) is documented once, canonically, in the `orchestra` package's `skills/memory-discipline/SKILL.md`.
 
 ## Fail-open behavior
 

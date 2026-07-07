@@ -58,9 +58,11 @@ Usage:
   node dist/server.mjs
       Start the MCP stdio server (default mode — no flags).
 
-  node dist/server.mjs --inject --project-id <id> [--budget <bytes>]
+  node dist/server.mjs --inject --project-id <id> [--budget <bytes>] [--inject-mode index|full]
       Print a token-dense memory block for SessionStart context injection
-      and exit. --budget defaults to 9500 bytes.
+      and exit. --budget defaults to 9500 bytes (2000 in index mode).
+      --inject-mode index prints a compact entity index instead of the
+      full fact dump (experimental, default: full).
 
   node dist/server.mjs --migrate [--commit] --project-root <path>
       Migrate legacy wisdom JSON (.claude/orchestra-wisdom.json) into the
@@ -103,7 +105,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const server = new McpServer({ name: 'orchestra-memory', version: '0.1.0' });
+  const server = new McpServer({ name: 'orchestra-memory', version: '0.2.0' });
 
   server.registerTool(
     saveTool.name,

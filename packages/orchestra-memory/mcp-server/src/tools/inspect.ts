@@ -20,18 +20,16 @@ import type { SqliteDatabase } from '../db/connection.js';
 import type { Scope } from '../db/repository.js';
 import { renderInspect, type InspectNodeRow, type InspectObservationRow } from '../render.js';
 import { isPrivateDenied, privateDeniedMessage, resolveProjectId, type ToolContext } from './context.js';
+import { SCOPE_NOTE } from './descriptions.js';
 
 export const name = 'memory_inspect';
 
-export const description = `Debug/trust escape hatch: show a human-readable markdown view of stored memory.
+export const description = `Debug/trust escape hatch: a human-readable markdown view of stored memory.
 
-Unlike every other tool in this server, the output is prose markdown intended for a human to
-audit, not token-dense LLM input. Shows full metadata per observation: confidence, source,
-valid_from, invalidated_at, superseded_by — including invalidated/superseded facts, which
-memory_search and memory_traverse hide. Use this when you or the user need to verify what is
-actually stored, why a fact was superseded, or where a fact came from. Filter by "entity"
-(substring match on canonical name or alias) and/or "scope_filter" and "project_id" to narrow
-the view; omit all filters to see a recent slice of everything visible to your project context.`;
+Unlike every other tool here, output is prose markdown for a human to audit, not token-dense LLM
+input. Shows full metadata (confidence, source, valid_from, invalidated_at, superseded_by),
+including invalidated/superseded facts which memory_search/memory_traverse hide. ${SCOPE_NOTE}
+Filter by entity/scope_filter/project_id; omit for a recent slice of everything visible to you.`;
 
 export const inputShape = {
   scope_filter: z.array(z.enum(['global', 'project', 'private'])).optional(),

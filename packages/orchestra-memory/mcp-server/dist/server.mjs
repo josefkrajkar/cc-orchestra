@@ -21506,16 +21506,14 @@ function normalizeForDedupe(text) {
 }
 
 // src/render.ts
-function isoDate(iso) {
-  return iso.slice(0, 10) || iso;
-}
 function renderObservationLine(row) {
   const category = row.category ?? "fact";
-  return `#${row.id} [${row.scope}|${category}|${row.confidence}|${isoDate(row.validFrom)}] ${row.canonical}: ${row.text}`;
+  return `#${row.id} [${row.scope}|${category}|${row.confidence}] ${row.canonical}: ${row.text}`;
 }
 function renderEdgeLine(edge) {
   return `${edge.srcCanonical} -${edge.predicate}-> ${edge.dstCanonical}`;
 }
+var RELATED_OBS_CAP = 3;
 function renderSearchResults(results, expanded, edges) {
   const lines = [];
   if (results.length > 0) {
@@ -21525,8 +21523,9 @@ function renderSearchResults(results, expanded, edges) {
   const seenObsIds = new Set(results.map((r) => r.observationId));
   const relatedLines = [];
   for (const node of expanded) {
-    for (const obs of node.observations) {
-      if (seenObsIds.has(obs.id)) continue;
+    const visibleObs = node.observations.filter((obs) => !seenObsIds.has(obs.id));
+    if (visibleObs.length === 0) continue;
+    for (const obs of visibleObs.slice(0, RELATED_OBS_CAP)) {
       relatedLines.push(
         renderObservationLine({
           id: obs.id,
@@ -21538,6 +21537,9 @@ function renderSearchResults(results, expanded, edges) {
           validFrom: obs.validFrom
         })
       );
+    }
+    if (visibleObs.length > RELATED_OBS_CAP) {
+      relatedLines.push(`  (+${visibleObs.length - RELATED_OBS_CAP} more \u2014 memory_inspect "${node.canonical}")`);
     }
   }
   if (relatedLines.length > 0) {
@@ -21553,14 +21555,16 @@ function renderSearchResults(results, expanded, edges) {
   }
   return lines.join("\n");
 }
-function renderTraverse(rootCanonical, depth, expanded, edges) {
+function renderTraverse(rootCanonical, depth, expanded, edges, rootId) {
   const lines = [`# Traverse from "${rootCanonical}" (depth ${depth})`];
   for (const node of expanded) {
     if (node.observations.length === 0) {
       lines.push(`[${node.scope}|node] ${node.canonical} (no valid observations)`);
       continue;
     }
-    for (const obs of node.observations) {
+    const isRoot = rootId !== void 0 ? node.id === rootId : node.canonical === rootCanonical;
+    const obsToRender = isRoot ? node.observations : node.observations.slice(0, RELATED_OBS_CAP);
+    for (const obs of obsToRender) {
       lines.push(
         renderObservationLine({
           id: obs.id,
@@ -21573,6 +21577,9 @@ function renderTraverse(rootCanonical, depth, expanded, edges) {
         })
       );
     }
+    if (!isRoot && node.observations.length > RELATED_OBS_CAP) {
+      lines.push(`  (+${node.observations.length - RELATED_OBS_CAP} more \u2014 memory_inspect "${node.canonical}")`);
+    }
   }
   if (edges.length > 0) {
     lines.push("# Relations");
@@ -21581,8 +21588,10 @@ function renderTraverse(rootCanonical, depth, expanded, edges) {
   return lines.join("\n");
 }
 function renderSaveResult(summary, facts, relations) {
+  const nearDuplicateCount = summary.nearDuplicate ?? 0;
+  const nearDuplicateNote = nearDuplicateCount > 0 ? `, near-duplicate ${nearDuplicateCount}` : "";
   const lines = [
-    `Saved ${summary.saved}, duplicate ${summary.duplicate}, rejected ${summary.rejected}, relations ${summary.relations}.`
+    `Saved ${summary.saved}, duplicate ${summary.duplicate}${nearDuplicateNote}, rejected ${summary.rejected}, relations ${summary.relations}.`
   ];
   for (const f of facts) {
     if (f.status === "saved") {
@@ -21590,6 +21599,10 @@ function renderSaveResult(summary, facts, relations) {
       lines.push(`  saved [obs#${f.observationId}] ${f.entity}${supersedeNote}`);
     } else if (f.status === "duplicate") {
       lines.push(`  duplicate [obs#${f.observationId}] ${f.entity} (already stored)`);
+    } else if (f.status === "near_duplicate") {
+      lines.push(
+        `  near-duplicate of [obs#${f.observationId}] ${f.entity} \u2014 pass allow_near_duplicate:true or supersedes_observation_id to save anyway`
+      );
     } else {
       lines.push(`  rejected ${f.entity || "(no entity)"}: ${f.reason}`);
     }
@@ -21702,50 +21715,30 @@ function isPrivateDenied(ctx, scopes) {
   return Array.isArray(scopes) ? scopes.includes("private") : scopes === "private";
 }
 
+// src/tools/descriptions.ts
+var SCOPE_NOTE = "project_id defaults to your own project; a different project's id is rejected. Scopes: global (everywhere), project (this repo), private (this repo only, never leaks out).";
+var DISTILL_NOTE = "Facts must be atomic, self-contained sentences (no pronouns \u2014 name the subject) and \u2264500 chars; full write-discipline contract: memory-discipline skill.";
+var LINE_FORMAT_NOTE = 'Lines render as "#<id> [scope|category|confidence] entity: text"; relations as "src -predicate-> dst".';
+
 // src/tools/save.ts
 var name = "memory_save";
 var description = `Persist distilled facts and relations into the cross-project graph memory.
 
-YOU (the calling model) must distill BEFORE calling this tool \u2014 never pass raw conversation
-text through unmodified:
-- Each fact's "text" MUST be an atomic, self-contained proposition: a complete sentence that
-  stands on its own without the surrounding conversation. NEVER use pronouns or references that
-  only make sense in context ("it", "this", "the above", "he" meaning someone mentioned
-  earlier) \u2014 always name the subject explicitly.
-- One fact per array entry. If a sentence expresses two independent facts, split it into two
-  entries.
-- "entity.name" MUST be the canonical name of the real-world thing the fact is about (e.g.
-  "Josef Krajkar", not "he"; "Orchestra plugin", not "this project" or "the repo"). Reuse the
-  exact same canonical name every time you refer to the same entity so facts merge onto one
-  graph node instead of fragmenting into near-duplicate entities.
-- Use "relations" for structural triples between two entities: {src, predicate, dst}, e.g.
-  {src: "Orchestra plugin", predicate: "uses", dst: "SQLite"}. Prefer a relation over prose when
-  a triple captures the fact better.
-- "scope" applies to the whole call and defaults to "project" when omitted. Use "global" only
-  for facts true across ALL projects (e.g. a durable user preference). Use "private" for
-  sensitive, client-specific facts that must NEVER leak into other projects. "project" and
-  "private" scope both use project_id \u2014 omit it to write to your own project (this server
-  instance's identity); passing a DIFFERENT project's id is rejected outright, so there is no
-  way to write into another project's project/private scope through this tool.
-- "category" (convention|gotcha|decision|failed_approach|preference|fact) helps downstream
-  tools like wisdom_get group facts; set it when the fact fits one of those categories.
-- To correct or update a fact that is no longer true, do NOT just save a new, unrelated
-  observation next to the old one: first call memory_search (or memory_inspect) to find the old
-  fact's "#<id>" (rendered as a prefix on every observation line), then save the replacement
-  fact with that id in "supersedes_observation_id". This atomically marks the old observation
-  invalidated+superseded (it stops appearing in memory_search/memory_traverse, though
-  memory_inspect still shows the history) and links it to the new one. The old observation must
-  exist, still be valid (not already invalidated/superseded), and be visible to your own project
-  (global, or the same project_id as this save) \u2014 otherwise the fact is rejected rather than
-  silently saved without the supersession.
+Distill BEFORE calling \u2014 never pass raw text unmodified. ${DISTILL_NOTE} One fact per entry;
+reuse the exact "entity.name" (e.g. "Josef Krajkar", not "he") every time so facts merge onto
+one node. "relations" are structural triples ({src, predicate, dst}) \u2014 prefer one over prose.
 
-Server-side validation rejects: facts with no entity name, empty/whitespace-only text, text over
-500 characters (not atomic \u2014 split it into multiple facts), and an invalid/inaccessible
-supersedes_observation_id. Before inserting, the server compares each fact's normalized text
-against the target entity's existing valid observations; an exact-normalized match is reported
-as a duplicate and skipped rather than re-inserted. The response reports a per-fact outcome
-(saved [+ superseded #N] | duplicate | rejected: reason) plus summary counts and the IDs of
-newly created observations \u2014 read it to confirm what was actually written.`;
+${SCOPE_NOTE} "scope" defaults to "project". "category"
+(convention|gotcha|decision|failed_approach|preference|fact) helps wisdom_get group results.
+
+To correct an outdated fact, pass its "#<id>" as "supersedes_observation_id" \u2014 invalidates the
+old observation and links it to the new one; the target must exist, be valid, and visible to
+your project, else the save is rejected.
+
+Also rejected: missing entity name, empty text. An exact-normalized duplicate is skipped, not
+re-inserted. A high-similarity ("near-duplicate") fact is also skipped unless you pass
+"allow_near_duplicate":true or supersede it instead. Response reports a per-fact outcome (saved
+[+ superseded #N] | duplicate | near_duplicate | rejected: reason) and new ids.`;
 var entityShape = external_exports.object({
   name: external_exports.string(),
   kind: external_exports.string().optional()
@@ -21769,7 +21762,10 @@ var inputShape = {
   scope: external_exports.enum(["global", "project", "private"]).optional(),
   project_id: external_exports.string().optional(),
   project_label: external_exports.string().optional(),
-  source: external_exports.string().optional()
+  source: external_exports.string().optional(),
+  // Bypasses the near-duplicate guard (see findNearDuplicate below) for every
+  // fact in this call — use when a high-similarity match is a false positive.
+  allow_near_duplicate: external_exports.boolean().optional()
 };
 var inputSchema = external_exports.object(inputShape);
 function rejectedResult(error2) {
@@ -21780,6 +21776,64 @@ function rejectedResult(error2) {
     relations: [],
     error: error2
   };
+}
+var MIN_TOKEN_LEN = 4;
+var CANDIDATE_WORD_CAP = 20;
+var MIN_ANCHOR_WORDS = 3;
+var MAX_ANCHOR_WORDS = 6;
+var ANCHOR_DF_SEARCH_LIMIT = 50;
+var NEAR_DUP_RANK_THRESHOLD = -3.5;
+var STOPWORDS = new Set(
+  `a an the and or but if then else for nor so yet
+   of to in on at by with from into onto up down out over under again further
+   is are was were be been being have has had do does did doing will would
+   shall should may might must can could this that these those it its
+   as not no never always about above below between through during before
+   after once here there when where why how all any both each few more most
+   other some such only own same than too very just also across still
+   i you he she we they them his her our your their what which who whom
+   because while against without within per via etc used use uses using`.split(/\s+/).filter(Boolean)
+);
+function significantWords(text) {
+  const seen = /* @__PURE__ */ new Set();
+  const words = [];
+  for (const match of text.toLowerCase().matchAll(/[a-z0-9]+/g)) {
+    const word = match[0];
+    if (word.length < MIN_TOKEN_LEN || STOPWORDS.has(word) || seen.has(word)) continue;
+    seen.add(word);
+    words.push(word);
+    if (words.length >= CANDIDATE_WORD_CAP) break;
+  }
+  return words;
+}
+function findNearDuplicate(repo, text, scope, projectId) {
+  try {
+    const words = significantWords(text);
+    if (words.length < MIN_ANCHOR_WORDS) return null;
+    const scored = words.map((word, index) => ({
+      word,
+      index,
+      // Document-frequency proxy: how many existing valid/visible
+      // observations already contain this word. A word with df=0 can never
+      // contribute to a match and is dropped before ranking.
+      df: repo.searchObservations({ query: word, scopes: [scope], projectId, limit: ANCHOR_DF_SEARCH_LIMIT }).length
+    }));
+    const candidates = scored.filter((c) => c.df > 0);
+    if (candidates.length < MIN_ANCHOR_WORDS) return null;
+    candidates.sort((a, b) => a.df - b.df || b.word.length - a.word.length || a.index - b.index);
+    const pool = candidates.slice(0, MAX_ANCHOR_WORDS).map((c) => c.word);
+    for (let size = pool.length; size >= MIN_ANCHOR_WORDS; size--) {
+      const query = pool.slice(0, size).join(" ");
+      const rows = repo.searchObservations({ query, scopes: [scope], projectId, limit: 5 });
+      const best = rows[0];
+      if (best) {
+        return { observationId: best.observationId, rank: best.rank };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 function fetchSupersedeTarget(db, id) {
   return db.prepare(
@@ -21860,6 +21914,18 @@ function handleSave(repo, db, input, ctx) {
       });
       continue;
     }
+    if (supersedesId == null && input.allow_near_duplicate !== true) {
+      const nearDup = findNearDuplicate(repo, fact.text, scope, projectId);
+      if (nearDup && nearDup.rank <= NEAR_DUP_RANK_THRESHOLD) {
+        factOutcomes.push({
+          entity: fact.entity.name,
+          status: "near_duplicate",
+          observationId: nearDup.observationId,
+          nodeId: nodeResult.id
+        });
+        continue;
+      }
+    }
     const observationId = repo.addObservation({
       nodeId: nodeResult.id,
       text: fact.text.trim(),
@@ -21914,6 +21980,7 @@ function handleSave(repo, db, input, ctx) {
   const summary = {
     saved: factOutcomes.filter((f) => f.status === "saved").length,
     duplicate: factOutcomes.filter((f) => f.status === "duplicate").length,
+    nearDuplicate: factOutcomes.filter((f) => f.status === "near_duplicate").length,
     rejected: factOutcomes.filter((f) => f.status === "rejected").length,
     relations: relationOutcomes.length
   };
@@ -22260,19 +22327,24 @@ function runBackup(argv) {
 
 // src/inject.ts
 var DEFAULT_BUDGET_BYTES = 9500;
+var INDEX_DEFAULT_BUDGET_BYTES = 2e3;
 function parseArgs3(argv) {
   let projectId = null;
-  let budget = DEFAULT_BUDGET_BYTES;
+  let explicitBudget = null;
+  let mode = "full";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--project-id") {
       projectId = argv[++i]?.trim() || null;
     } else if (arg === "--budget") {
       const parsed = Number(argv[++i]);
-      if (Number.isFinite(parsed) && parsed > 0) budget = Math.floor(parsed);
+      if (Number.isFinite(parsed) && parsed > 0) explicitBudget = Math.floor(parsed);
+    } else if (arg === "--inject-mode") {
+      mode = argv[++i] === "index" ? "index" : "full";
     }
   }
-  return { projectId, budget };
+  const budget = explicitBudget ?? (mode === "index" ? INDEX_DEFAULT_BUDGET_BYTES : DEFAULT_BUDGET_BYTES);
+  return { projectId, budget, mode };
 }
 function queryObservations(db, scope, projectId, limit) {
   const orderBy = `CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC, o.valid_from DESC`;
@@ -22295,14 +22367,46 @@ function queryObservations(db, scope, projectId, limit) {
        LIMIT ?`
   ).all(scope, projectId, limit);
 }
+function queryHighConfidenceObservations(db, scope, projectId, limit) {
+  if (scope === "global") {
+    return db.prepare(
+      `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
+                o.category as category, o.confidence as confidence, o.valid_from as validFrom
+         FROM observations o JOIN nodes n ON n.id = o.node_id
+         WHERE o.invalidated_at IS NULL AND o.scope = 'global' AND o.confidence = 'high'
+         ORDER BY o.valid_from DESC
+         LIMIT ?`
+    ).all(limit);
+  }
+  return db.prepare(
+    `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
+              o.category as category, o.confidence as confidence, o.valid_from as validFrom
+       FROM observations o JOIN nodes n ON n.id = o.node_id
+       WHERE o.invalidated_at IS NULL AND o.scope = ? AND o.project_id = ? AND o.confidence = 'high'
+       ORDER BY o.valid_from DESC
+       LIMIT ?`
+  ).all(scope, projectId, limit);
+}
+function queryEntityRoster(db, projectId) {
+  return db.prepare(
+    `SELECT n.canonical as canonical, COUNT(*) as count
+       FROM observations o JOIN nodes n ON n.id = o.node_id
+       WHERE o.invalidated_at IS NULL
+         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))
+       GROUP BY o.node_id
+       ORDER BY MAX(o.valid_from) DESC`
+  ).all(projectId);
+}
 var byteLen = (s) => Buffer.byteLength(s, "utf8");
+var ENTITY_LINE_WIDTH = 100;
+var PINNED_CAP = 8;
 function buildInjectOutput(db, projectId, budget) {
   const projectFacts = queryObservations(db, "project", projectId, 300);
   const globalFacts = queryObservations(db, "global", projectId, 50);
   const privateFacts = queryObservations(db, "private", projectId, 300);
   const totalFacts = projectFacts.length + globalFacts.length + privateFacts.length;
   if (totalFacts === 0) return "";
-  const header = `# Orchestra graph memory \u2014 auto-injected at session start for project ${projectId}. These facts were remembered from past sessions across this project, global scope, and this project's private facts. Use the orchestra-memory MCP tools (memory_search, memory_traverse, memory_inspect) to explore further, and memory_save to add new facts.`;
+  const header = `# Graph memory (project ${projectId}) \u2014 memory_search to expand.`;
   const sections = [];
   if (projectFacts.length > 0) {
     sections.push({ title: "## Project facts", lines: projectFacts.map(renderObservationLine) });
@@ -22344,9 +22448,65 @@ function buildInjectOutput(db, projectId, budget) {
   }
   return kept.join("\n");
 }
+function buildInjectIndex(db, projectId, budget) {
+  const pinned = [
+    ...queryHighConfidenceObservations(db, "project", projectId, PINNED_CAP),
+    ...queryHighConfidenceObservations(db, "global", projectId, PINNED_CAP),
+    ...queryHighConfidenceObservations(db, "private", projectId, PINNED_CAP)
+  ].sort((a, b) => b.validFrom.localeCompare(a.validFrom)).slice(0, PINNED_CAP);
+  const entities = queryEntityRoster(db, projectId);
+  if (entities.length === 0) return "";
+  const header = `# Graph memory index (project ${projectId}) \u2014 memory_search <entity> to expand.`;
+  const kept = [header, ""];
+  let usedBytes = byteLen(kept.join("\n"));
+  if (pinned.length > 0) {
+    const title = "## Pinned (high-confidence)";
+    const titleCost = byteLen(title) + 1;
+    if (usedBytes + titleCost <= budget) {
+      kept.push(title);
+      usedBytes += titleCost;
+      for (const obs of pinned) {
+        const line = renderObservationLine(obs);
+        const cost = byteLen(line) + 1;
+        if (usedBytes + cost > budget) break;
+        kept.push(line);
+        usedBytes += cost;
+      }
+    }
+  }
+  const entityTitle = "## Entities (facts)";
+  const entityTitleCost = byteLen(entityTitle) + 1;
+  let includedEntities = 0;
+  if (usedBytes + entityTitleCost <= budget) {
+    kept.push(entityTitle);
+    usedBytes += entityTitleCost;
+    let openLineIdx = -1;
+    for (const row of entities) {
+      const item = `${row.canonical} (${row.count})`;
+      const openLine = openLineIdx === -1 ? null : kept[openLineIdx];
+      const isNewLine = openLine === null || byteLen(`${openLine} \xB7 ${item}`) > ENTITY_LINE_WIDTH;
+      const newLine = isNewLine ? item : `${openLine} \xB7 ${item}`;
+      const prevLineCost = isNewLine ? 0 : byteLen(openLine) + 1;
+      const newLineCost = byteLen(newLine) + 1;
+      if (usedBytes - prevLineCost + newLineCost > budget) break;
+      usedBytes = usedBytes - prevLineCost + newLineCost;
+      if (isNewLine) {
+        kept.push(newLine);
+        openLineIdx = kept.length - 1;
+      } else {
+        kept[openLineIdx] = newLine;
+      }
+      includedEntities += 1;
+    }
+    if (includedEntities < entities.length) {
+      kept.push(`[+${entities.length - includedEntities} more entities \u2014 memory_stats / memory_search]`);
+    }
+  }
+  return kept.join("\n");
+}
 function runInject(argv) {
   try {
-    const { projectId, budget } = parseArgs3(argv);
+    const { projectId, budget, mode } = parseArgs3(argv);
     if (!projectId) {
       process.stderr.write("orchestra-memory --inject: missing --project-id, nothing to inject\n");
     } else {
@@ -22355,7 +22515,7 @@ function runInject(argv) {
         if (diagnostic) process.stderr.write(`${diagnostic}
 `);
       } else {
-        const output = buildInjectOutput(db, projectId, budget);
+        const output = mode === "index" ? buildInjectIndex(db, projectId, budget) : buildInjectOutput(db, projectId, budget);
         if (output) process.stdout.write(output);
       }
     }
@@ -22375,25 +22535,16 @@ function runInject(argv) {
 var name2 = "memory_search";
 var description2 = `Search the cross-project graph memory for facts matching a query.
 
-Runs a full-text (BM25) search over valid observations, then expands one hop into the graph
-from every matching entity to surface directly connected facts and relations too. Results are
-scope-guarded server-side: you always see facts scoped "global" (visible everywhere) plus your
-OWN project's "project" and "private" facts. project_id defaults to this server instance's own
-project identity when omitted; if you pass a project_id, it must match that same identity \u2014
-passing a DIFFERENT project's id is rejected outright (a hard trust boundary, not a preference),
-so there is no way to read another project's "project" or "private" facts through this tool.
-
-Output is token-dense, one fact per line, prefixed with a stable id you can reuse later (e.g. as
-memory_save's supersedes_observation_id, or memory_invalidate's observation_id): "#<id>
-[scope|category|confidence|date] entity: text". Relations (graph edges) are rendered as triples:
-"src -predicate-> dst". Omit scope_filter to search across global + your own project scopes, or
-narrow it (e.g. ["global"]) to search only globally-true facts.`;
+Full-text (BM25) search over valid observations. Direct relations between matched facts are
+always included; expand:true additionally pulls 1-hop neighbor facts (capped per node). ${SCOPE_NOTE} ${LINE_FORMAT_NOTE} "#<id>" is reusable later
+(supersedes_observation_id, observation_id).`;
 var inputShape2 = {
   query: external_exports.string().min(1, "query must not be empty"),
   scope_filter: external_exports.array(external_exports.enum(["global", "project", "private"])).optional(),
   project_id: external_exports.string().optional(),
   limit: external_exports.number().int().positive().max(200).optional(),
-  include_invalidated: external_exports.boolean().optional()
+  include_invalidated: external_exports.boolean().optional(),
+  expand: external_exports.boolean().optional()
 };
 var inputSchema2 = external_exports.object(inputShape2);
 function fetchVisibleEdges(db, nodeIds, projectId) {
@@ -22430,9 +22581,9 @@ function handleSearch(repo, db, input, ctx) {
     includeInvalidated: input.include_invalidated ?? false
   });
   const nodeIds = [...new Set(results.map((r) => r.nodeId))];
-  const expanded = nodeIds.length > 0 ? repo.expandFromNodes(nodeIds, 1, scopes, projectId) : [];
-  const expandedIds = expanded.map((n) => n.id);
-  const edges = expandedIds.length > 0 ? fetchVisibleEdges(db, expandedIds, projectId) : [];
+  const expanded = input.expand === true && nodeIds.length > 0 ? repo.expandFromNodes(nodeIds, 1, scopes, projectId) : [];
+  const edgeSourceIds = input.expand === true ? expanded.map((n) => n.id) : nodeIds;
+  const edges = edgeSourceIds.length > 0 ? fetchVisibleEdges(db, edgeSourceIds, projectId) : [];
   const text = renderSearchResults(results, expanded, edges);
   return { text };
 }
@@ -22441,14 +22592,9 @@ function handleSearch(repo, db, input, ctx) {
 var name3 = "memory_link";
 var description3 = `Create (or confirm) a relation triple between two canonical entities.
 
-Resolves/creates both "src" and "dst" as graph nodes (same canonicalization as memory_save \u2014
-reuse the exact canonical name you've used before for the same entity) and upserts a directed
-edge "src -predicate-> dst" between them. Idempotent: calling this again with the same
-src/predicate/dst/scope/project_id reuses the existing live edge instead of creating a
-duplicate. "scope" defaults to "project" and, like memory_save, "project"/"private" scope uses
-project_id \u2014 omit it to use your own project (this server instance's identity); a different
-project's id is rejected. Prefer short, verb-like predicates ("uses", "depends_on", "prefers",
-"decided", "supersedes") over prose.`;
+Resolves/creates "src"/"dst" as nodes (same canonicalization as memory_save) and upserts a
+directed edge "src -predicate-> dst"; idempotent on repeat. ${SCOPE_NOTE} "scope" defaults to
+"project".`;
 var inputShape3 = {
   src: external_exports.string().min(1, "src must not be empty"),
   predicate: external_exports.string().min(1, "predicate must not be empty"),
@@ -22506,21 +22652,19 @@ function handleLink(repo, input, ctx) {
 
 // src/tools/traverse.ts
 var name4 = "memory_traverse";
+var TRAVERSE_NODE_CAP = 40;
 var description4 = `Walk the graph outward from a named entity to see everything connected to it.
 
-Resolves "entity" by canonical name or known alias (case/whitespace-insensitive) \u2014 it does NOT
-create a new entity if none is found, unlike memory_save. Looks in the "global" scope plus your
-OWN project's "project"/"private" scopes; project_id defaults to this server instance's own
-project identity and passing a different project's id is rejected. Returns the connected
-entities' valid observations plus the graph edges between them, rendered as token-dense lines
-("#<id> [scope|category|confidence|date] entity: text") and relation triples
-("src -predicate-> dst"). depth controls how many hops to follow (default 2, max 4) \u2014 keep it
-low for broad hubs to avoid an overwhelming response.`;
+Resolves "entity" by canonical name or alias \u2014 unlike memory_save, it does NOT create one if
+none is found. ${SCOPE_NOTE} ${LINE_FORMAT_NOTE} "depth" is hops to follow (default 2, max 4) \u2014
+keep it low for broad hubs; expanded nodes are capped at ${TRAVERSE_NODE_CAP} (override via
+"max_nodes").`;
 var inputShape4 = {
   entity: external_exports.string().min(1, "entity must not be empty"),
   depth: external_exports.number().int().min(0).max(4).optional(),
   scope_filter: external_exports.array(external_exports.enum(["global", "project", "private"])).optional(),
-  project_id: external_exports.string().optional()
+  project_id: external_exports.string().optional(),
+  max_nodes: external_exports.number().int().positive().max(200).optional()
 };
 var inputSchema4 = external_exports.object(inputShape4);
 function normalize2(name8) {
@@ -22556,23 +22700,32 @@ function handleTraverse(repo, db, input, ctx) {
     return { text: `No entity found matching "${input.entity}".` };
   }
   const expanded = repo.expandFromNodes([root.id], depth, scopes, projectId);
-  const nodeIds = expanded.map((n) => n.id);
+  const nodeCap = input.max_nodes ?? TRAVERSE_NODE_CAP;
+  let nodesForRender = expanded;
+  let droppedCount = 0;
+  if (expanded.length > nodeCap) {
+    const rootIndex = expanded.findIndex((n) => n.id === root.id);
+    nodesForRender = rootIndex >= nodeCap ? [expanded[rootIndex], ...expanded.slice(0, nodeCap - 1)] : expanded.slice(0, nodeCap);
+    droppedCount = expanded.length - nodesForRender.length;
+  }
+  const nodeIds = nodesForRender.map((n) => n.id);
   const edges = nodeIds.length > 0 ? fetchVisibleEdges(db, nodeIds, projectId) : [];
-  const text = renderTraverse(root.canonical, depth, expanded, edges);
+  let text = renderTraverse(root.canonical, depth, nodesForRender, edges, root.id);
+  if (droppedCount > 0) {
+    text += `
+[+${droppedCount} more nodes \u2014 narrow the traversal or use memory_search]`;
+  }
   return { text };
 }
 
 // src/tools/inspect.ts
 var name5 = "memory_inspect";
-var description5 = `Debug/trust escape hatch: show a human-readable markdown view of stored memory.
+var description5 = `Debug/trust escape hatch: a human-readable markdown view of stored memory.
 
-Unlike every other tool in this server, the output is prose markdown intended for a human to
-audit, not token-dense LLM input. Shows full metadata per observation: confidence, source,
-valid_from, invalidated_at, superseded_by \u2014 including invalidated/superseded facts, which
-memory_search and memory_traverse hide. Use this when you or the user need to verify what is
-actually stored, why a fact was superseded, or where a fact came from. Filter by "entity"
-(substring match on canonical name or alias) and/or "scope_filter" and "project_id" to narrow
-the view; omit all filters to see a recent slice of everything visible to your project context.`;
+Unlike every other tool here, output is prose markdown for a human to audit, not token-dense LLM
+input. Shows full metadata (confidence, source, valid_from, invalidated_at, superseded_by),
+including invalidated/superseded facts which memory_search/memory_traverse hide. ${SCOPE_NOTE}
+Filter by entity/scope_filter/project_id; omit for a recent slice of everything visible to you.`;
 var inputShape5 = {
   scope_filter: external_exports.array(external_exports.enum(["global", "project", "private"])).optional(),
   project_id: external_exports.string().optional(),
@@ -22632,21 +22785,15 @@ function handleInspect(db, input, ctx) {
 
 // src/tools/invalidate.ts
 var name6 = "memory_invalidate";
-var description6 = `Retire facts that are no longer true (supersede/forget), soft-deleting by default.
+var description6 = `Retire facts that are no longer true, soft-deleting by default.
 
-Pass exactly one of:
-- "observation_id" \u2014 invalidate a single observation returned earlier by memory_search /
-  memory_inspect / memory_save. Rejected if that observation belongs to a project other than
-  your own (global observations are always eligible).
-- "entity" \u2014 invalidate every currently-valid observation attached to that entity (resolved by
-  canonical name or alias, same lookup as memory_traverse; project_id defaults to your own
-  project \u2014 a different project's id is rejected).
+Pass exactly one of: "observation_id" (a single #id from earlier results; another project's
+observation is rejected, global is always eligible) or "entity" (every valid observation of that
+entity, resolved by canonical name or alias). ${SCOPE_NOTE}
 
-By default this is a SOFT delete: sets invalidated_at so memory_search/memory_traverse stop
-surfacing the fact, but memory_inspect can still show its history. Pass hard:true only when you
-need a genuine, irreversible delete (e.g. data entered in error) \u2014 prefer soft delete when a
-fact merely became outdated, since that preserves an audit trail. "reason" is recorded in the
-tool's response for traceability (not persisted on the row today).`;
+Soft delete (default) sets invalidated_at \u2014 search/traverse stop surfacing the fact, but
+memory_inspect keeps the history. Pass hard:true only for genuine irreversible deletes (data
+entered in error); prefer soft to preserve the audit trail. "reason" is echoed for traceability.`;
 var inputShape6 = {
   observation_id: external_exports.number().int().positive().optional(),
   entity: external_exports.string().optional(),
@@ -22704,12 +22851,8 @@ function handleInvalidate(repo, db, input, ctx) {
 var name7 = "memory_stats";
 var description7 = `Report counts of nodes/observations/edges in the graph memory, by scope.
 
-project_id defaults to this server instance's own project identity and includes your project's
-"project"/"private" counts alongside the always-visible "global" counts; a different project's
-id is rejected. Also reports how many observations are invalidated (soft-deleted) and how many
-are older than 90 days (candidates for review), plus the on-disk database size in bytes. Useful
-before a bulk memory_save to sanity-check growth, or to decide how aggressively a SessionStart
-injection should be trimmed.`;
+${SCOPE_NOTE} Also reports invalidated (soft-deleted) counts, observations older than 90 days,
+and on-disk database size \u2014 useful before a bulk memory_save or to size a SessionStart injection.`;
 var inputShape7 = {
   project_id: external_exports.string().optional()
 };
@@ -22726,55 +22869,54 @@ function handleStats(repo, input, ctx) {
 // src/tools/wisdom-compat.ts
 var WISDOM_CATEGORIES2 = ["convention", "gotcha", "decision", "failed_approach"];
 var getName = "wisdom_get";
-var getDescription = `Read accumulated wisdom (conventions/gotchas/decisions/failed_approaches).
+var getDescription = `Read accumulated wisdom (conventions/gotchas/decisions/failed_approaches) \u2014 a thin, pre-filtered view over memory_search's data.
 
-Returns valid (non-invalidated) observations whose category is one of convention, gotcha,
-decision, or failed_approach, scoped to "global" (visible everywhere) plus "project" and
-"private" for your own project (project_id defaults to this server instance's own project
-identity; a different project's id is rejected). Output is grouped by category with a
-confidence marker per entry, and flags entries older than 90 days with \u26A0\uFE0F as candidates for
-review, matching Orchestra's existing /wisdom display format. Internally this is the same
-underlying data as memory_search filtered to wisdom categories \u2014 prefer this tool over
-memory_search when you specifically want conventions/gotchas/decisions/failed_approaches rather
-than arbitrary facts.`;
+${SCOPE_NOTE} Grouped by category with a confidence marker; flags entries older than 90 days
+with \u26A0\uFE0F. "limit" caps returned rows (default 30, max 200); "category" narrows to a single wisdom category.`;
+var DEFAULT_WISDOM_LIMIT = 30;
 var getInputShape = {
-  project_id: external_exports.string().optional()
+  project_id: external_exports.string().optional(),
+  limit: external_exports.number().int().positive().max(200).optional(),
+  category: external_exports.enum(WISDOM_CATEGORIES2).optional()
 };
 var getInputSchema = external_exports.object(getInputShape);
-function listWisdomRows(db, projectId) {
-  const categoryPlaceholders = WISDOM_CATEGORIES2.map(() => "?").join(",");
+function listWisdomRows(db, projectId, category, limit) {
+  const categories = category ? [category] : [...WISDOM_CATEGORIES2];
+  const categoryPlaceholders = categories.map(() => "?").join(",");
+  const whereClause = `WHERE o.invalidated_at IS NULL
+         AND o.category IN (${categoryPlaceholders})
+         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))`;
+  const total = db.prepare(`SELECT COUNT(*) as count FROM observations o ${whereClause}`).get(...categories, projectId).count;
   const rows = db.prepare(
     `SELECT o.category as category, o.text as text, o.confidence as confidence,
               o.valid_from as validFrom
        FROM observations o
-       WHERE o.invalidated_at IS NULL
-         AND o.category IN (${categoryPlaceholders})
-         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))
+       ${whereClause}
        ORDER BY CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC,
-                o.valid_from DESC`
-  ).all(...WISDOM_CATEGORIES2, projectId);
-  return rows;
+                o.valid_from DESC
+       LIMIT ?`
+  ).all(...categories, projectId, limit);
+  return { rows, total };
 }
 function handleWisdomGet(db, input, ctx) {
   const resolved = resolveProjectId(ctx, input.project_id);
   if (!resolved.ok) {
     return { text: `Rejected: ${resolved.message}` };
   }
-  const rows = listWisdomRows(db, resolved.projectId);
-  return { text: renderWisdom(rows) };
+  const limit = input.limit ?? DEFAULT_WISDOM_LIMIT;
+  const { rows, total } = listWisdomRows(db, resolved.projectId, input.category, limit);
+  const text = renderWisdom(rows);
+  if (total > rows.length) {
+    return { text: `${text}
+
+[+${total - rows.length} more \u2014 raise limit or filter by category]` };
+  }
+  return { text };
 }
 var addName = "wisdom_add";
-var addDescription = `Add a single wisdom entry (convention/gotcha/decision/failed_approach).
+var addDescription = `Add a single wisdom entry (convention/gotcha/decision/failed_approach) \u2014 a thin wrapper over memory_save.
 
-Thin wrapper over memory_save: writes "text" as an atomic, self-contained observation attached
-to a per-project "project wisdom" entity, tagged with the given "category". "scope" defaults to
-"project" (your own project, per project_id's normal default/mismatch rules) \u2014 pass
-scope: "global" explicitly to share wisdom across every project (an intentional opt-in, not the
-default), or scope: "private" for client-confidential wisdom scoped to your own project only.
-Same distillation rules as memory_save apply to "text" \u2014 it must be a complete, self-contained
-sentence, not a fragment referring back to the conversation. Duplicate detection is identical to
-memory_save: an exact-normalized repeat of existing wisdom text is reported as a duplicate
-rather than re-inserted.`;
+${DISTILL_NOTE} ${SCOPE_NOTE} "scope" defaults to "project".`;
 var addInputShape = {
   text: external_exports.string().min(1, "text must not be empty"),
   category: external_exports.enum(WISDOM_CATEGORIES2),
@@ -22824,9 +22966,11 @@ Usage:
   node dist/server.mjs
       Start the MCP stdio server (default mode \u2014 no flags).
 
-  node dist/server.mjs --inject --project-id <id> [--budget <bytes>]
+  node dist/server.mjs --inject --project-id <id> [--budget <bytes>] [--inject-mode index|full]
       Print a token-dense memory block for SessionStart context injection
-      and exit. --budget defaults to 9500 bytes.
+      and exit. --budget defaults to 9500 bytes (2000 in index mode).
+      --inject-mode index prints a compact entity index instead of the
+      full fact dump (experimental, default: full).
 
   node dist/server.mjs --migrate [--commit] --project-root <path>
       Migrate legacy wisdom JSON (.claude/orchestra-wisdom.json) into the
@@ -22864,7 +23008,7 @@ async function main() {
       `orchestra-memory tools are disabled for this session: ${diagnostic ?? "database unavailable"}`
     );
   }
-  const server = new McpServer({ name: "orchestra-memory", version: "0.1.0" });
+  const server = new McpServer({ name: "orchestra-memory", version: "0.2.0" });
   server.registerTool(
     name,
     { title: "Save memory facts", description, inputSchema: inputShape },

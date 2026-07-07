@@ -3,19 +3,15 @@ import { z } from 'zod';
 import type { Repository, Scope } from '../db/repository.js';
 import { renderLinkResult, type RelationOutcome } from '../render.js';
 import { privateDeniedMessage, resolveProjectId, type ToolContext } from './context.js';
+import { SCOPE_NOTE } from './descriptions.js';
 
 export const name = 'memory_link';
 
 export const description = `Create (or confirm) a relation triple between two canonical entities.
 
-Resolves/creates both "src" and "dst" as graph nodes (same canonicalization as memory_save —
-reuse the exact canonical name you've used before for the same entity) and upserts a directed
-edge "src -predicate-> dst" between them. Idempotent: calling this again with the same
-src/predicate/dst/scope/project_id reuses the existing live edge instead of creating a
-duplicate. "scope" defaults to "project" and, like memory_save, "project"/"private" scope uses
-project_id — omit it to use your own project (this server instance's identity); a different
-project's id is rejected. Prefer short, verb-like predicates ("uses", "depends_on", "prefers",
-"decided", "supersedes") over prose.`;
+Resolves/creates "src"/"dst" as nodes (same canonicalization as memory_save) and upserts a
+directed edge "src -predicate-> dst"; idempotent on repeat. ${SCOPE_NOTE} "scope" defaults to
+"project".`;
 
 export const inputShape = {
   src: z.string().min(1, 'src must not be empty'),

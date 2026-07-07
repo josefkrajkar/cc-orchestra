@@ -32,7 +32,18 @@ if command -v node &>/dev/null && [ -f "$MEMORY_SERVER" ]; then
   # ===================================================
   MEMORY_PROJECT_ID=$(echo "$CWD" | shasum -a 256 2>/dev/null | cut -c1-16 || echo "")
   if [ -n "$MEMORY_PROJECT_ID" ]; then
-    GRAPHMEM_RAW=$(node "$MEMORY_SERVER" --inject --project-id "$MEMORY_PROJECT_ID" --budget 4000 2>/dev/null || echo "")
+    # Lazy injection index mode (D10: OFF by default, opt-in env var until
+    # validated) — see mcp-server/src/inject.ts's buildInjectIndex. Any
+    # value other than exactly "index" fails open to the validated full dump.
+    POSTCOMPACT_INJECT_MODE="${ORCHESTRA_MEMORY_INJECT_MODE:-full}"
+    POSTCOMPACT_BUDGET=4000
+    if [ "$POSTCOMPACT_INJECT_MODE" = "index" ]; then
+      POSTCOMPACT_INJECT_MODE=index
+      POSTCOMPACT_BUDGET=2000
+    else
+      POSTCOMPACT_INJECT_MODE=full
+    fi
+    GRAPHMEM_RAW=$(node "$MEMORY_SERVER" --inject --project-id "$MEMORY_PROJECT_ID" --budget "$POSTCOMPACT_BUDGET" --inject-mode "$POSTCOMPACT_INJECT_MODE" 2>/dev/null || echo "")
     if [ -n "$GRAPHMEM_RAW" ]; then
       jq -n --arg msg "## Graph memory (post-compact): ${GRAPHMEM_RAW}" '{continue: true, suppressOutput: false, systemMessage: $msg}'
       exit 0

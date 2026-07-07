@@ -11,6 +11,7 @@ import { handleInvalidate } from '../src/tools/invalidate.js';
 import { handleStats } from '../src/tools/stats.js';
 import { handleWisdomAdd, handleWisdomGet } from '../src/tools/wisdom-compat.js';
 import { buildInjectOutput, runInject } from '../src/inject.js';
+import { RELATED_OBS_CAP } from '../src/render.js';
 
 /** Builds a ToolContext for a given "server instance" project identity —
  * tests simulate different projects/sessions by constructing a fresh
@@ -18,6 +19,32 @@ import { buildInjectOutput, runInject } from '../src/inject.js';
  * unit-testable without a real MCP/stdio round trip). */
 const ctxFor = (ownProjectId: string | null): ToolContext => ({ ownProjectId });
 const NO_PROJECT = ctxFor(null);
+
+/** Background facts unrelated to the near-duplicate pairs under test.
+ * BM25's IDF term (and therefore its rank magnitude) is a function of
+ * corpus diversity — with only one prior observation to compare against,
+ * even a perfect match scores near zero (see save.ts's
+ * NEAR_DUP_RANK_THRESHOLD doc comment) and never clears the guard's
+ * threshold. Seeding a handful of unrelated facts first gives BM25 the
+ * topical diversity a real (non brand-new) project's memory would have. */
+function seedNearDupNoise(repo: Repository, db: SqliteDatabase, ctx: ToolContext, projectId: string): void {
+  const noise = [
+    'The team prefers dark mode enabled by default in the settings panel.',
+    'Redis is used as the session store for the auth service in production.',
+    'The user prefers tabs over spaces for indentation in Python files.',
+    'The team decided to use pnpm workspaces instead of npm or yarn for this monorepo.',
+    'Client requested no third-party analytics tools be added to the dashboard.',
+    'Josef Krajkar maintains the Orchestra plugin project and lives in Prague.',
+  ];
+  for (const [i, text] of noise.entries()) {
+    handleSave(
+      repo,
+      db,
+      { facts: [{ entity: { name: `Noise ${i}` }, text }], scope: 'project', project_id: projectId },
+      ctx
+    );
+  }
+}
 
 describe('mcp tools', () => {
   let db: SqliteDatabase;
@@ -75,12 +102,15 @@ describe('mcp tools', () => {
     expect(dup.summary.duplicate).toBe(1);
     expect(dup.summary.saved).toBe(0);
 
-    const search = handleSearch(repo, db, { query: 'SQLite' }, NO_PROJECT);
+    // "sqlite" has no observations of its own (it only exists via the relation
+    // below), so it can never FTS-match — expand:true is required to reach it
+    // via 1-hop expansion from the matched "orchestra plugin" node.
+    const search = handleSearch(repo, db, { query: 'SQLite', expand: true }, NO_PROJECT);
     // Entity canonical names are normalized (lowercase/trimmed) by the repository.
     expect(search.text).toContain('orchestra plugin: Orchestra plugin uses SQLite');
     expect(search.text).toContain('orchestra plugin -uses-> sqlite');
-    // Finding 2: observation lines carry a stable "#<id>" prefix.
-    expect(search.text).toMatch(/^# Matches\n#\d+ \[global\|decision\|high\|/);
+    // Finding 2: observation lines carry a stable "#<id>" prefix (dateless format).
+    expect(search.text).toMatch(/^# Matches\n#\d+ \[global\|decision\|high\] /);
   });
 
   it('rejects scope "project"/"private" without project_id', () => {
@@ -122,6 +152,159 @@ describe('mcp tools', () => {
 
     const asA = handleSearch(repo, db, { query: 'clientalpha', project_id: 'proj-a' }, ctxFor('proj-a'));
     expect(asA.text).toContain('clientalpha');
+  });
+
+  it('memory_search default (expand:false) never renders "# Related (1 hop)", even when the matched node has neighbors with observations', () => {
+    const ctx = ctxFor('proj-search-noexpand');
+    handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          { entity: { name: 'Root Entity' }, text: 'Root Entity has a unique marker keyword zzzrootmarker in it.' },
+          {
+            entity: { name: 'Neighbor Entity' },
+            text: 'Neighbor Entity has its own separate observation text here.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-search-noexpand',
+      },
+      ctx
+    );
+    handleLink(
+      repo,
+      {
+        src: 'Root Entity',
+        predicate: 'relates_to',
+        dst: 'Neighbor Entity',
+        scope: 'project',
+        project_id: 'proj-search-noexpand',
+      },
+      ctx
+    );
+
+    // No "expand" flag passed at all -> defaults to false.
+    const defaultSearch = handleSearch(
+      repo,
+      db,
+      { query: 'zzzrootmarker', project_id: 'proj-search-noexpand' },
+      ctx
+    );
+    expect(defaultSearch.text).toContain('Root Entity has a unique marker');
+    expect(defaultSearch.text).not.toContain('# Related (1 hop)');
+    expect(defaultSearch.text).not.toContain('Neighbor Entity has its own separate observation');
+    // Neighbor Entity wasn't itself matched by the query, so the relation
+    // can't surface without expansion either.
+    expect(defaultSearch.text).not.toContain('root entity -relates_to-> neighbor entity');
+  });
+
+  it('memory_search with expand:true caps related-node observations at RELATED_OBS_CAP, with an overflow marker', () => {
+    const ctx = ctxFor('proj-search-cap');
+    handleSave(
+      repo,
+      db,
+      {
+        facts: [{ entity: { name: 'Root Node' }, text: 'Root Node has the unique marker keyword yyyrootcap in it.' }],
+        scope: 'project',
+        project_id: 'proj-search-cap',
+      },
+      ctx
+    );
+    for (let i = 0; i < 4; i++) {
+      handleSave(
+        repo,
+        db,
+        {
+          facts: [
+            { entity: { name: 'Hub Node' }, text: `Hub Node observation number ${i} describing distinct content.` },
+          ],
+          scope: 'project',
+          project_id: 'proj-search-cap',
+        },
+        ctx
+      );
+    }
+    handleLink(
+      repo,
+      { src: 'Root Node', predicate: 'relates_to', dst: 'Hub Node', scope: 'project', project_id: 'proj-search-cap' },
+      ctx
+    );
+
+    const search = handleSearch(
+      repo,
+      db,
+      { query: 'yyyrootcap', project_id: 'proj-search-cap', expand: true },
+      ctx
+    );
+    expect(search.text).toContain('# Related (1 hop)');
+    const hubObsMatches = search.text.match(/Hub Node observation number \d describing distinct content\./g) ?? [];
+    expect(hubObsMatches).toHaveLength(RELATED_OBS_CAP);
+    expect(search.text).toContain('(+1 more — memory_inspect "hub node")');
+  });
+
+  it('memory_traverse caps expanded nodes via max_nodes, keeps the root, and never renders an edge to a dropped node', () => {
+    const ctx = ctxFor('proj-traverse-cap');
+    handleSave(
+      repo,
+      db,
+      {
+        facts: [{ entity: { name: 'Hub Node' }, text: 'Hub Node is the root of a wide traversal test.' }],
+        scope: 'project',
+        project_id: 'proj-traverse-cap',
+      },
+      ctx
+    );
+    for (let i = 0; i < 8; i++) {
+      handleSave(
+        repo,
+        db,
+        {
+          facts: [
+            { entity: { name: `Neighbor ${i}` }, text: `Neighbor ${i} is a leaf node reachable from the hub.` },
+          ],
+          scope: 'project',
+          project_id: 'proj-traverse-cap',
+        },
+        ctx
+      );
+      handleLink(
+        repo,
+        {
+          src: 'Hub Node',
+          predicate: 'connects_to',
+          dst: `Neighbor ${i}`,
+          scope: 'project',
+          project_id: 'proj-traverse-cap',
+        },
+        ctx
+      );
+    }
+
+    const traverse = handleTraverse(
+      repo,
+      db,
+      { entity: 'Hub Node', depth: 1, max_nodes: 5, project_id: 'proj-traverse-cap' },
+      ctx
+    );
+
+    // Root is always kept and rendered uncapped.
+    expect(traverse.text).toContain('Hub Node is the root of a wide traversal test.');
+    // 9 expanded nodes (hub + 8 neighbors) capped to 5 -> 4 dropped.
+    expect(traverse.text).toContain('[+4 more nodes — narrow the traversal or use memory_search]');
+
+    const neighborMatches = traverse.text.match(/Neighbor \d is a leaf node reachable from the hub\./g) ?? [];
+    expect(neighborMatches).toHaveLength(4);
+
+    // Every rendered edge must point at a neighbor that also survived the cap
+    // (i.e. is actually rendered as a node) — never at a dropped one.
+    const edgeLines = traverse.text.split('\n').filter((line) => line.includes('-connects_to->'));
+    expect(edgeLines).toHaveLength(4);
+    for (const edgeLine of edgeLines) {
+      const dstMatch = edgeLine.match(/-connects_to-> neighbor (\d)/);
+      expect(dstMatch).not.toBeNull();
+      expect(traverse.text).toContain(`Neighbor ${dstMatch![1]} is a leaf node`);
+    }
   });
 
   it('memory_link is idempotent and reused by memory_traverse for alias resolution', () => {
@@ -194,10 +377,24 @@ describe('mcp tools', () => {
       ctxFor('proj-a')
     );
 
-    const asA = handleSearch(repo, db, { query: 'payment processing', project_id: 'proj-a' }, ctxFor('proj-a'));
+    // "service y" has no observations of its own, so surfacing the triple
+    // requires 1-hop expansion from the matched "service x" node — exercise
+    // the isolation property through that (riskier) expansion path rather
+    // than the cheap same-node-only edge lookup.
+    const asA = handleSearch(
+      repo,
+      db,
+      { query: 'payment processing', project_id: 'proj-a', expand: true },
+      ctxFor('proj-a')
+    );
     expect(asA.text).toContain('service x -depends_on-> service y');
 
-    const asB = handleSearch(repo, db, { query: 'payment processing', project_id: 'proj-b' }, ctxFor('proj-b'));
+    const asB = handleSearch(
+      repo,
+      db,
+      { query: 'payment processing', project_id: 'proj-b', expand: true },
+      ctxFor('proj-b')
+    );
     expect(asB.text).toBe('No matching facts found.');
   });
 
@@ -342,6 +539,41 @@ describe('mcp tools', () => {
     // wisdom from a different project must not leak in.
     const otherProject = handleWisdomGet(db, { project_id: 'proj-other' }, ctxFor('proj-other'));
     expect(otherProject.text).not.toContain('path aliases');
+  });
+
+  it('wisdom_get: "limit" truncates with a hint; "category" narrows to a single category', () => {
+    const ctx = ctxFor('proj-wisdom-limit');
+    for (let i = 0; i < 5; i++) {
+      handleWisdomAdd(
+        repo,
+        db,
+        {
+          text: `Distinct convention entry number ${i} for limit testing.`,
+          category: 'convention',
+          project_id: 'proj-wisdom-limit',
+        },
+        ctx
+      );
+    }
+    handleWisdomAdd(
+      repo,
+      db,
+      { text: 'A single gotcha entry for category filtering.', category: 'gotcha', project_id: 'proj-wisdom-limit' },
+      ctx
+    );
+
+    // 6 total entries, limit:2 -> only 2 rendered, hint reports the other 4.
+    const limited = handleWisdomGet(db, { project_id: 'proj-wisdom-limit', limit: 2 }, ctx);
+    expect(limited.text).toContain('[+4 more — raise limit or filter by category]');
+    const renderedConventions =
+      limited.text.match(/Distinct convention entry number \d for limit testing\./g) ?? [];
+    const renderedGotchas = limited.text.match(/A single gotcha entry for category filtering\./g) ?? [];
+    expect(renderedConventions.length + renderedGotchas.length).toBe(2);
+
+    const gotchaOnly = handleWisdomGet(db, { project_id: 'proj-wisdom-limit', category: 'gotcha' }, ctx);
+    expect(gotchaOnly.text).toContain('A single gotcha entry for category filtering.');
+    expect(gotchaOnly.text).not.toContain('Distinct convention entry');
+    expect(gotchaOnly.text).not.toContain('[+');
   });
 
   it('wisdom_add defaults to project scope (not global) and requires explicit opt-in for global', () => {
@@ -661,6 +893,276 @@ describe('mcp tools', () => {
       stdoutSpy.mockRestore();
       stderrSpy.mockRestore();
     }
+  });
+
+  it('memory_save near-duplicate guard: flags a high-overlap restatement, no new observation is created', () => {
+    const ctx = ctxFor('proj-neardup');
+    seedNearDupNoise(repo, db, ctx, 'proj-neardup');
+    const first = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'The project uses SQLite with FTS5 for full-text search over observation records.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup',
+      },
+      ctx
+    );
+    const originalId = first.facts[0]?.observationId;
+    expect(originalId).toBeDefined();
+
+    const restated = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'This project relies on SQLite and FTS5 to provide full-text search across observations.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup',
+      },
+      ctx
+    );
+    expect(restated.facts[0]?.status).toBe('near_duplicate');
+    expect(restated.facts[0]?.observationId).toBe(originalId);
+    expect(restated.summary.saved).toBe(0);
+    expect(restated.summary.nearDuplicate).toBe(1);
+    expect(restated.text).toContain(`near-duplicate of [obs#${originalId}]`);
+
+    // No new observation was inserted — the node still has exactly one.
+    const inspect = handleInspect(db, { project_id: 'proj-neardup', entity: 'Storage Backend' }, ctx);
+    const obsCount = (inspect.text.match(/^- \*\*#\d+\*\*/gm) ?? []).length;
+    expect(obsCount).toBe(1);
+  });
+
+  it('memory_save near-duplicate guard: allow_near_duplicate:true overrides and saves anyway', () => {
+    const ctx = ctxFor('proj-neardup-allow');
+    seedNearDupNoise(repo, db, ctx, 'proj-neardup-allow');
+    handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'The project uses SQLite with FTS5 for full-text search over observation records.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-allow',
+      },
+      ctx
+    );
+
+    const overridden = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'This project relies on SQLite and FTS5 to provide full-text search across observations.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-allow',
+        allow_near_duplicate: true,
+      },
+      ctx
+    );
+    expect(overridden.facts[0]?.status).toBe('saved');
+    expect(overridden.summary.saved).toBe(1);
+    expect(overridden.summary.nearDuplicate).toBe(0);
+  });
+
+  it('memory_save near-duplicate guard: supersedes_observation_id bypasses the guard and invalidates the original', () => {
+    const ctx = ctxFor('proj-neardup-supersede');
+    seedNearDupNoise(repo, db, ctx, 'proj-neardup-supersede');
+    const first = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'The project uses SQLite with FTS5 for full-text search over observation records.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-supersede',
+      },
+      ctx
+    );
+    const originalId = first.facts[0]?.observationId!;
+
+    const superseded = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'This project relies on SQLite and FTS5 to provide full-text search across observations.',
+            supersedes_observation_id: originalId,
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-supersede',
+      },
+      ctx
+    );
+    expect(superseded.facts[0]?.status).toBe('saved');
+    expect(superseded.facts[0]?.supersededId).toBe(originalId);
+
+    const inspect = handleInspect(
+      db,
+      { project_id: 'proj-neardup-supersede', entity: 'Storage Backend' },
+      ctx
+    );
+    expect(inspect.text).toMatch(/superseded by #\d+/);
+  });
+
+  it('memory_save near-duplicate guard: a dissimilar fact on the same entity is saved normally', () => {
+    const ctx = ctxFor('proj-neardup-dissimilar');
+    handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'The project uses SQLite with FTS5 for full-text search over observation records.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-dissimilar',
+      },
+      ctx
+    );
+
+    const unrelated = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'The team prefers dark mode enabled by default in the settings panel.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-dissimilar',
+      },
+      ctx
+    );
+    expect(unrelated.facts[0]?.status).toBe('saved');
+    expect(unrelated.summary.saved).toBe(1);
+    expect(unrelated.summary.nearDuplicate).toBe(0);
+  });
+
+  it('memory_save near-duplicate guard: scope isolation — another project\'s near-identical fact never triggers the guard', () => {
+    seedNearDupNoise(repo, db, ctxFor('proj-neardup-iso-a'), 'proj-neardup-iso-a');
+    const withinA = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'The project uses SQLite with FTS5 for full-text search over observation records.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-iso-a',
+      },
+      ctxFor('proj-neardup-iso-a')
+    );
+    // Sanity: within project A, with the same noise corpus, this restatement
+    // pair genuinely triggers the guard (proves the isolation check below is
+    // testing something real, not just an always-weak signal).
+    const restatedWithinA = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'This project relies on SQLite and FTS5 to provide full-text search across observations.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-iso-a',
+      },
+      ctxFor('proj-neardup-iso-a')
+    );
+    expect(restatedWithinA.facts[0]?.status).toBe('near_duplicate');
+    expect(withinA.facts[0]?.observationId).toBeDefined();
+
+    const otherProject = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'This project relies on SQLite and FTS5 to provide full-text search across observations.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-neardup-iso-b',
+      },
+      ctxFor('proj-neardup-iso-b')
+    );
+    expect(otherProject.facts[0]?.status).toBe('saved');
+    expect(otherProject.summary.nearDuplicate).toBe(0);
+  });
+
+  it('memory_save: an exact-normalized duplicate still short-circuits as "duplicate", not "near_duplicate"', () => {
+    const ctx = ctxFor('proj-exact-vs-near');
+    const first = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: 'The project uses SQLite with FTS5 for full-text search over observation records.',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-exact-vs-near',
+      },
+      ctx
+    );
+    const originalId = first.facts[0]?.observationId;
+
+    const exact = handleSave(
+      repo,
+      db,
+      {
+        facts: [
+          {
+            entity: { name: 'Storage Backend' },
+            text: '  The project uses SQLite with FTS5 for full-text search over observation records.  ',
+          },
+        ],
+        scope: 'project',
+        project_id: 'proj-exact-vs-near',
+      },
+      ctx
+    );
+    expect(exact.facts[0]?.status).toBe('duplicate');
+    expect(exact.facts[0]?.observationId).toBe(originalId);
+    expect(exact.summary.duplicate).toBe(1);
+    expect(exact.summary.nearDuplicate).toBe(0);
   });
 
   it('runInject fails open (exit 0, no stdout) when --project-id is missing', () => {

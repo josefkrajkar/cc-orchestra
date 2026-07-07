@@ -6,25 +6,30 @@ import type { Repository, Scope, SimilarNode } from '../db/repository.js';
 import { renderTraverse } from '../render.js';
 import { isPrivateDenied, privateDeniedMessage, resolveProjectId, type ToolContext } from './context.js';
 import { fetchVisibleEdges } from './search.js';
+import { LINE_FORMAT_NOTE, SCOPE_NOTE } from './descriptions.js';
 
 export const name = 'memory_traverse';
 
+/** Cap on the number of expanded nodes passed to rendering — keeps a broad
+ * hub's traversal from dumping an unbounded node list on the caller. The
+ * root node is always kept; overflow is summarized with a trailing marker
+ * line rather than silently dropped. Exported so tests can assert against it
+ * rather than hardcoding "40". */
+export const TRAVERSE_NODE_CAP = 40;
+
 export const description = `Walk the graph outward from a named entity to see everything connected to it.
 
-Resolves "entity" by canonical name or known alias (case/whitespace-insensitive) — it does NOT
-create a new entity if none is found, unlike memory_save. Looks in the "global" scope plus your
-OWN project's "project"/"private" scopes; project_id defaults to this server instance's own
-project identity and passing a different project's id is rejected. Returns the connected
-entities' valid observations plus the graph edges between them, rendered as token-dense lines
-("#<id> [scope|category|confidence|date] entity: text") and relation triples
-("src -predicate-> dst"). depth controls how many hops to follow (default 2, max 4) — keep it
-low for broad hubs to avoid an overwhelming response.`;
+Resolves "entity" by canonical name or alias — unlike memory_save, it does NOT create one if
+none is found. ${SCOPE_NOTE} ${LINE_FORMAT_NOTE} "depth" is hops to follow (default 2, max 4) —
+keep it low for broad hubs; expanded nodes are capped at ${TRAVERSE_NODE_CAP} (override via
+"max_nodes").`;
 
 export const inputShape = {
   entity: z.string().min(1, 'entity must not be empty'),
   depth: z.number().int().min(0).max(4).optional(),
   scope_filter: z.array(z.enum(['global', 'project', 'private'])).optional(),
   project_id: z.string().optional(),
+  max_nodes: z.number().int().positive().max(200).optional(),
 };
 
 const inputSchema = z.object(inputShape);
@@ -91,9 +96,32 @@ export function handleTraverse(
   }
 
   const expanded = repo.expandFromNodes([root.id], depth, scopes, projectId);
-  const nodeIds = expanded.map((n) => n.id);
+
+  // Cap the number of nodes handed to rendering so a broad hub can't dump an
+  // unbounded node list on the caller. The root is always kept: if capping
+  // the returned order would otherwise drop it, it's pulled to the front and
+  // the cap is applied to the remainder (still preferring returned order).
+  const nodeCap = input.max_nodes ?? TRAVERSE_NODE_CAP;
+  let nodesForRender = expanded;
+  let droppedCount = 0;
+  if (expanded.length > nodeCap) {
+    const rootIndex = expanded.findIndex((n) => n.id === root.id);
+    nodesForRender =
+      rootIndex >= nodeCap
+        ? [expanded[rootIndex]!, ...expanded.slice(0, nodeCap - 1)]
+        : expanded.slice(0, nodeCap);
+    droppedCount = expanded.length - nodesForRender.length;
+  }
+
+  // Re-querying edges scoped to the surviving node ids (rather than filtering
+  // the full-expansion edge list) is what keeps relations from referencing
+  // nodes whose observations got dropped by the cap above.
+  const nodeIds = nodesForRender.map((n) => n.id);
   const edges = nodeIds.length > 0 ? fetchVisibleEdges(db, nodeIds, projectId) : [];
 
-  const text = renderTraverse(root.canonical, depth, expanded, edges);
+  let text = renderTraverse(root.canonical, depth, nodesForRender, edges, root.id);
+  if (droppedCount > 0) {
+    text += `\n[+${droppedCount} more nodes — narrow the traversal or use memory_search]`;
+  }
   return { text };
 }

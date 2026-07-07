@@ -46,6 +46,7 @@ Additionally, reject:
 3. **Relations as `memory_link` triples** — when a fact expresses a relationship between two entities ("X uses Y", "X prefers Y", "X decided Y"), express it as a `subject | predicate | object` triple via `memory_link`, not as prose buried inside an observation text.
 4. **One fact per item** — don't bundle multiple unrelated facts into a single observation; split them so each can be independently searched, invalidated, and superseded.
 5. **Convert relative dates to absolute** — "yesterday", "last week", "last month" must become an explicit ISO-8601 date before saving. A future session reading the fact months later has no reference point for "yesterday".
+6. **The server enforces a near-duplicate guard** — `memory_save` runs a lexical (FTS/BM25) near-dup check against existing visible facts; a close restatement is skipped with a `near-duplicate of [obs#N]` outcome. Prefer superseding the old fact (`supersedes_observation_id`) over forcing the write with `allow_near_duplicate: true` — forcing is for genuinely distinct facts that only look similar. Exact duplicates are still silently skipped as before.
 
 ## SCOPE selection rules
 

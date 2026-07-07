@@ -1,6 +1,6 @@
 {
   "name": "orchestra-memory-mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server (stdio) providing cross-project graph memory for the Orchestra plugin, backed by SQLite (node:sqlite) with FTS5.",
   "type": "module",
   "private": true,

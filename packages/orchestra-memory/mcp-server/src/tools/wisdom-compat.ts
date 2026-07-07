@@ -18,25 +18,25 @@ import type { Repository, Scope } from '../db/repository.js';
 import { renderWisdom, type WisdomRow } from '../render.js';
 import { resolveProjectId, type ToolContext } from './context.js';
 import { handleSave } from './save.js';
+import { DISTILL_NOTE, SCOPE_NOTE } from './descriptions.js';
 
 const WISDOM_CATEGORIES = ['convention', 'gotcha', 'decision', 'failed_approach'] as const;
 
 export const getName = 'wisdom_get';
 
-export const getDescription = `Read accumulated wisdom (conventions/gotchas/decisions/failed_approaches).
+// Thin compat wrapper: internally the same data as memory_search, filtered
+// to wisdom categories and rendered in Orchestra's /wisdom format.
+export const getDescription = `Read accumulated wisdom (conventions/gotchas/decisions/failed_approaches) — a thin, pre-filtered view over memory_search's data.
 
-Returns valid (non-invalidated) observations whose category is one of convention, gotcha,
-decision, or failed_approach, scoped to "global" (visible everywhere) plus "project" and
-"private" for your own project (project_id defaults to this server instance's own project
-identity; a different project's id is rejected). Output is grouped by category with a
-confidence marker per entry, and flags entries older than 90 days with ⚠️ as candidates for
-review, matching Orchestra's existing /wisdom display format. Internally this is the same
-underlying data as memory_search filtered to wisdom categories — prefer this tool over
-memory_search when you specifically want conventions/gotchas/decisions/failed_approaches rather
-than arbitrary facts.`;
+${SCOPE_NOTE} Grouped by category with a confidence marker; flags entries older than 90 days
+with ⚠️. "limit" caps returned rows (default 30, max 200); "category" narrows to a single wisdom category.`;
+
+const DEFAULT_WISDOM_LIMIT = 30;
 
 export const getInputShape = {
   project_id: z.string().optional(),
+  limit: z.number().int().positive().max(200).optional(),
+  category: z.enum(WISDOM_CATEGORIES).optional(),
 };
 
 const getInputSchema = z.object(getInputShape);
@@ -46,21 +46,45 @@ export interface WisdomGetOutput {
   text: string;
 }
 
-function listWisdomRows(db: SqliteDatabase, projectId: string | null): WisdomRow[] {
-  const categoryPlaceholders = WISDOM_CATEGORIES.map(() => '?').join(',');
+interface ListWisdomResult {
+  rows: WisdomRow[];
+  total: number;
+}
+
+function listWisdomRows(
+  db: SqliteDatabase,
+  projectId: string | null,
+  category: string | undefined,
+  limit: number
+): ListWisdomResult {
+  const categories = category ? [category] : [...WISDOM_CATEGORIES];
+  const categoryPlaceholders = categories.map(() => '?').join(',');
+  // Scope guard kept semantically identical to the pre-filter version: global
+  // rows are always visible, project/private rows only when they match the
+  // caller's resolved project_id.
+  const whereClause = `WHERE o.invalidated_at IS NULL
+         AND o.category IN (${categoryPlaceholders})
+         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))`;
+
+  const total = (
+    db
+      .prepare(`SELECT COUNT(*) as count FROM observations o ${whereClause}`)
+      .get(...categories, projectId) as { count: number }
+  ).count;
+
   const rows = db
     .prepare(
       `SELECT o.category as category, o.text as text, o.confidence as confidence,
               o.valid_from as validFrom
        FROM observations o
-       WHERE o.invalidated_at IS NULL
-         AND o.category IN (${categoryPlaceholders})
-         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))
+       ${whereClause}
        ORDER BY CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC,
-                o.valid_from DESC`
+                o.valid_from DESC
+       LIMIT ?`
     )
-    .all(...WISDOM_CATEGORIES, projectId) as unknown as WisdomRow[];
-  return rows;
+    .all(...categories, projectId, limit) as unknown as WisdomRow[];
+
+  return { rows, total };
 }
 
 export function handleWisdomGet(db: SqliteDatabase, input: WisdomGetInput, ctx: ToolContext): WisdomGetOutput {
@@ -68,23 +92,22 @@ export function handleWisdomGet(db: SqliteDatabase, input: WisdomGetInput, ctx: 
   if (!resolved.ok) {
     return { text: `Rejected: ${resolved.message}` };
   }
-  const rows = listWisdomRows(db, resolved.projectId);
-  return { text: renderWisdom(rows) };
+  const limit = input.limit ?? DEFAULT_WISDOM_LIMIT;
+  const { rows, total } = listWisdomRows(db, resolved.projectId, input.category, limit);
+  const text = renderWisdom(rows);
+  if (total > rows.length) {
+    return { text: `${text}\n\n[+${total - rows.length} more — raise limit or filter by category]` };
+  }
+  return { text };
 }
 
 export const addName = 'wisdom_add';
 
-export const addDescription = `Add a single wisdom entry (convention/gotcha/decision/failed_approach).
+// Thin compat wrapper: internally calls memory_save with a fixed "project
+// wisdom" entity, so its behavior (duplicate detection, validation) matches.
+export const addDescription = `Add a single wisdom entry (convention/gotcha/decision/failed_approach) — a thin wrapper over memory_save.
 
-Thin wrapper over memory_save: writes "text" as an atomic, self-contained observation attached
-to a per-project "project wisdom" entity, tagged with the given "category". "scope" defaults to
-"project" (your own project, per project_id's normal default/mismatch rules) — pass
-scope: "global" explicitly to share wisdom across every project (an intentional opt-in, not the
-default), or scope: "private" for client-confidential wisdom scoped to your own project only.
-Same distillation rules as memory_save apply to "text" — it must be a complete, self-contained
-sentence, not a fragment referring back to the conversation. Duplicate detection is identical to
-memory_save: an exact-normalized repeat of existing wisdom text is reported as a duplicate
-rather than re-inserted.`;
+${DISTILL_NOTE} ${SCOPE_NOTE} "scope" defaults to "project".`;
 
 export const addInputShape = {
   text: z.string().min(1, 'text must not be empty'),

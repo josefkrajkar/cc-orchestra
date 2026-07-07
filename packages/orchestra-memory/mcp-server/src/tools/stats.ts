@@ -5,17 +5,14 @@ import { z } from 'zod';
 import type { Repository } from '../db/repository.js';
 import { renderStats } from '../render.js';
 import { resolveProjectId, type ToolContext } from './context.js';
+import { SCOPE_NOTE } from './descriptions.js';
 
 export const name = 'memory_stats';
 
 export const description = `Report counts of nodes/observations/edges in the graph memory, by scope.
 
-project_id defaults to this server instance's own project identity and includes your project's
-"project"/"private" counts alongside the always-visible "global" counts; a different project's
-id is rejected. Also reports how many observations are invalidated (soft-deleted) and how many
-are older than 90 days (candidates for review), plus the on-disk database size in bytes. Useful
-before a bulk memory_save to sanity-check growth, or to decide how aggressively a SessionStart
-injection should be trimmed.`;
+${SCOPE_NOTE} Also reports invalidated (soft-deleted) counts, observations older than 90 days,
+and on-disk database size — useful before a bulk memory_save or to size a SessionStart injection.`;
 
 export const inputShape = {
   project_id: z.string().optional(),

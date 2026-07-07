@@ -88,6 +88,18 @@ Nothing about this plugin is allowed to break your session. Every entry point �
 - A missing or unreachable database behaves the same way — you get a clear "disabled" message from the tools, not a crash.
 - The one deliberate exception is a *committed* legacy-memory migration (`--migrate --commit`): because that step writes into the shared, cross-project database, it reports failure loudly rather than silently pretending to succeed. Everything else prioritizes never interrupting your work over surfacing an error.
 
+## Experimental: lazy injection index mode
+
+By default, both hooks inject a full dump of every fact visible to the current project. There's also an experimental **index mode** — a much smaller summary (a handful of pinned high-confidence facts plus a compact roster of every known entity, e.g. `orchestra plugin (5)`) that the model expands on demand with `memory_search` instead of receiving everything upfront. It targets roughly a ~500-token footprint versus the full dump.
+
+This ships **off by default** until it's been validated in practice — the full dump remains the default behavior. To opt in, set an environment variable before your Claude Code session starts:
+
+```bash
+export ORCHESTRA_MEMORY_INJECT_MODE=index
+```
+
+Unset, or set to anything other than exactly `index`, both hooks fail open to the existing full-dump behavior — no script edits required either way.
+
 ## Learn more
 
 - [`mcp-server/README.md`](mcp-server/README.md) — server internals: build/test/run, CLI modes (`--inject`, `--migrate`, `--backup`), full schema, the security model behind scoping, and the complete MCP tool reference. Also has a head-to-head positioning comparison against hosted/embedding-based memory layers and plain markdown session-memory approaches.

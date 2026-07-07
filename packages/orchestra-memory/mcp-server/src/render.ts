@@ -24,16 +24,12 @@ export interface RenderableEdge {
   dstCanonical: string;
 }
 
-function isoDate(iso: string): string {
-  return iso.slice(0, 10) || iso;
-}
-
 /** Renders one observation line with a stable `#<id>` prefix so the calling
  * LLM can reference a specific fact later (e.g. as memory_save's
  * supersedes_observation_id, or memory_invalidate's observation_id). */
 export function renderObservationLine(row: RenderableObservation): string {
   const category = row.category ?? 'fact';
-  return `#${row.id} [${row.scope}|${category}|${row.confidence}|${isoDate(row.validFrom)}] ${row.canonical}: ${row.text}`;
+  return `#${row.id} [${row.scope}|${category}|${row.confidence}] ${row.canonical}: ${row.text}`;
 }
 
 export function renderEdgeLine(edge: RenderableEdge): string {
@@ -43,6 +39,13 @@ export function renderEdgeLine(edge: RenderableEdge): string {
 export interface SearchResultLikeRow extends Omit<RenderableObservation, 'id'> {
   observationId: number;
 }
+
+/** Per-related-node cap on rendered observations in the "Related (1 hop)"
+ * section of memory_search and the non-root nodes of memory_traverse — keeps
+ * a single hub node from drowning the output. Overflow is summarized with a
+ * "(+N more — memory_inspect ...)" line instead of being silently dropped.
+ * Exported so tests can assert against it rather than hardcoding "3". */
+export const RELATED_OBS_CAP = 3;
 
 export function renderSearchResults(
   results: SearchResultLikeRow[],
@@ -58,8 +61,9 @@ export function renderSearchResults(
   const seenObsIds = new Set(results.map((r) => r.observationId));
   const relatedLines: string[] = [];
   for (const node of expanded) {
-    for (const obs of node.observations) {
-      if (seenObsIds.has(obs.id)) continue;
+    const visibleObs = node.observations.filter((obs) => !seenObsIds.has(obs.id));
+    if (visibleObs.length === 0) continue;
+    for (const obs of visibleObs.slice(0, RELATED_OBS_CAP)) {
       relatedLines.push(
         renderObservationLine({
           id: obs.id,
@@ -71,6 +75,9 @@ export function renderSearchResults(
           validFrom: obs.validFrom,
         })
       );
+    }
+    if (visibleObs.length > RELATED_OBS_CAP) {
+      relatedLines.push(`  (+${visibleObs.length - RELATED_OBS_CAP} more — memory_inspect "${node.canonical}")`);
     }
   }
   if (relatedLines.length > 0) {
@@ -93,7 +100,8 @@ export function renderTraverse(
   rootCanonical: string,
   depth: number,
   expanded: ExpandedNode[],
-  edges: RenderableEdge[]
+  edges: RenderableEdge[],
+  rootId?: number
 ): string {
   const lines: string[] = [`# Traverse from "${rootCanonical}" (depth ${depth})`];
   for (const node of expanded) {
@@ -101,7 +109,14 @@ export function renderTraverse(
       lines.push(`[${node.scope}|node] ${node.canonical} (no valid observations)`);
       continue;
     }
-    for (const obs of node.observations) {
+    // The root node (the entity memory_traverse was asked about) is rendered
+    // uncapped — it was explicitly requested. Every other (related) node is
+    // capped at RELATED_OBS_CAP so a hub node can't drown the output.
+    // Compare by id when available: canonical text is only unique per
+    // (scope, project), so two nodes in one traversal can share it.
+    const isRoot = rootId !== undefined ? node.id === rootId : node.canonical === rootCanonical;
+    const obsToRender = isRoot ? node.observations : node.observations.slice(0, RELATED_OBS_CAP);
+    for (const obs of obsToRender) {
       lines.push(
         renderObservationLine({
           id: obs.id,
@@ -114,6 +129,9 @@ export function renderTraverse(
         })
       );
     }
+    if (!isRoot && node.observations.length > RELATED_OBS_CAP) {
+      lines.push(`  (+${node.observations.length - RELATED_OBS_CAP} more — memory_inspect "${node.canonical}")`);
+    }
   }
   if (edges.length > 0) {
     lines.push('# Relations');
@@ -124,7 +142,10 @@ export function renderTraverse(
 
 export interface FactOutcome {
   entity: string;
-  status: 'saved' | 'duplicate' | 'rejected';
+  /** 'near_duplicate': memory_save's semantic near-dup guard matched an
+   * existing observation and skipped the insert; override with
+   * "allow_near_duplicate" or "supersedes_observation_id". */
+  status: 'saved' | 'duplicate' | 'near_duplicate' | 'rejected';
   observationId?: number;
   nodeId?: number;
   reason?: string;
@@ -147,6 +168,11 @@ export interface SaveSummary {
   duplicate: number;
   rejected: number;
   relations: number;
+  /** Count of 'near_duplicate' fact outcomes. Optional/undefined (treated as
+   * 0) so existing callers that don't produce near-duplicates (e.g. today's
+   * memory_save) keep building a plain {saved,duplicate,rejected,relations}
+   * object without a type error. */
+  nearDuplicate?: number;
 }
 
 export function renderSaveResult(
@@ -154,8 +180,13 @@ export function renderSaveResult(
   facts: FactOutcome[],
   relations: RelationOutcome[]
 ): string {
+  const nearDuplicateCount = summary.nearDuplicate ?? 0;
+  // Only append the near-duplicate count when it's non-zero, so the summary
+  // line stays byte-identical to the pre-existing format for every caller
+  // that never produces near-duplicates yet.
+  const nearDuplicateNote = nearDuplicateCount > 0 ? `, near-duplicate ${nearDuplicateCount}` : '';
   const lines: string[] = [
-    `Saved ${summary.saved}, duplicate ${summary.duplicate}, rejected ${summary.rejected}, relations ${summary.relations}.`,
+    `Saved ${summary.saved}, duplicate ${summary.duplicate}${nearDuplicateNote}, rejected ${summary.rejected}, relations ${summary.relations}.`,
   ];
   for (const f of facts) {
     if (f.status === 'saved') {
@@ -163,6 +194,10 @@ export function renderSaveResult(
       lines.push(`  saved [obs#${f.observationId}] ${f.entity}${supersedeNote}`);
     } else if (f.status === 'duplicate') {
       lines.push(`  duplicate [obs#${f.observationId}] ${f.entity} (already stored)`);
+    } else if (f.status === 'near_duplicate') {
+      lines.push(
+        `  near-duplicate of [obs#${f.observationId}] ${f.entity} — pass allow_near_duplicate:true or supersedes_observation_id to save anyway`
+      );
     } else {
       lines.push(`  rejected ${f.entity || '(no entity)'}: ${f.reason}`);
     }

@@ -8,7 +8,12 @@
 # EMPTY stdout and, at most, diagnostics on stderr — a broken/absent memory
 # layer must never break the SessionStart hook that calls this script.
 #
-# Usage: memory-inject.sh [budget_bytes]   (default budget: 9500 bytes)
+# Usage: memory-inject.sh [budget_bytes]   (default budget: 9500 bytes, or
+#   2000 bytes when ORCHESTRA_MEMORY_INJECT_MODE=index is set — see below)
+#
+# ORCHESTRA_MEMORY_INJECT_MODE=index opts into an experimental, smaller
+# "Pinned facts + entity roster" summary instead of the full dump (D10: OFF
+# by default until validated). Unset/any other value keeps the full dump.
 #
 # project_id is derived from $PWD using the SAME algorithm as the boulder
 # instance key in scripts/session-start.sh (sha256 of the cwd path, first
@@ -20,9 +25,23 @@
 
 set -euo pipefail
 
-BUDGET="${1:-9500}"
+# Lazy injection index mode (D10: OFF by default, ships as an opt-in env var
+# until validated) — see mcp-server/src/inject.ts's buildInjectIndex. Any
+# value other than exactly "index" fails open to the validated full dump.
+INJECT_MODE="${ORCHESTRA_MEMORY_INJECT_MODE:-full}"
+case "$INJECT_MODE" in
+  index) INJECT_MODE=index ;;
+  *) INJECT_MODE=full ;;
+esac
+
+DEFAULT_BUDGET=9500
+if [ "$INJECT_MODE" = "index" ]; then
+  DEFAULT_BUDGET=2000
+fi
+
+BUDGET="${1:-$DEFAULT_BUDGET}"
 case "$BUDGET" in
-  ''|*[!0-9]*) BUDGET=9500 ;;
+  ''|*[!0-9]*) BUDGET="$DEFAULT_BUDGET" ;;
 esac
 
 # Resolve plugin root from this script's own location — never rely on
@@ -74,7 +93,7 @@ fi
 # of fragility, for a call that is fast by design and already fails open
 # internally (dist/server.mjs --inject never exits nonzero, never hangs on
 # I/O it doesn't control). Never propagate a nonzero exit from this line.
-OUTPUT=$(node "$SERVER_ENTRY" --inject --project-id "$PROJECT_ID" --budget "$BUDGET" 2>/dev/null || true)
+OUTPUT=$(node "$SERVER_ENTRY" --inject --project-id "$PROJECT_ID" --budget "$BUDGET" --inject-mode "$INJECT_MODE" 2>/dev/null || true)
 
 if [ -z "$OUTPUT" ]; then
   exit 0
