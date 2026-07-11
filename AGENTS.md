@@ -17,7 +17,7 @@ This repo is a two-package monorepo, each package a standalone Claude Code plugi
 │           scout (haiku) + scholar (haiku) + architect (opus)           │
 ├────────────────────────────────────────────────────────────────────────┤
 │                          ORCHESTRATION LAYER                           │
-│               conductor (inherit/opus) + executor (opus)               │
+│              conductor (inherit/opus) + executor (sonnet)              │
 ├────────────────────────────────────────────────────────────────────────┤
 │                            EXECUTION LAYER                             │
 │  craftsman (sonnet) + sentinel (sonnet) + verifier (sonnet, optional)  │
@@ -30,7 +30,8 @@ This repo is a two-package monorepo, each package a standalone Claude Code plugi
 |-------|-------|-----------|
 | scout, scholar | haiku | Routing, triage, exploration — fast, cheap, sufficient |
 | craftsman | sonnet | Implementation, code writing — good balance of quality/speed |
-| architect, executor | opus | Planning, architecture, coordination — complex reasoning needed |
+| architect | opus | Planning, architecture — complex reasoning needed |
+| executor | sonnet | Coordination is mechanical once a plan exists — measured 27% of session cost on opus |
 | conductor | inherit (or opus) | May run as `inherit` to benefit from the calling session model; falls back to opus |
 | sentinel | sonnet | Structured checklist review follows a fixed protocol — full opus reasoning is unnecessary and expensive |
 | verifier | sonnet | Optional E2E smoke/browser verification — bounded, reportable protocol; discovers browser MCP tools at runtime, sonnet sufficient |
@@ -144,3 +145,15 @@ Added the optional end-to-end **verifier** agent — the plugin's 8th agent (son
 Added the `verify` skill (bilingual EN/CS triggers, routes to the verifier agent) and the clean-room `systematic-debugging` skill (4-phase root-cause protocol — trace the root cause, analyze related systems, form one hypothesis, test that one fix) now wired into craftsman's Error Recovery section and `/ralph` Step 3. Existing hard limits are unchanged by this addition: `STUCK_LIMIT=2`, `MAX_ITERATIONS=8`, and the max-2-attempt retry ceiling all still apply. `systematic-debugging` is attributed to obra/superpowers (MIT license).
 
 `plugin.json` bumped `2.3.0` → `2.4.0` to reflect the new agent and skills.
+
+## 2026-07-11 upgrade
+
+Token-efficiency batch, driven by a measured cost analysis of real orchestrated runs (executor=27% of session cost on opus, main=22%, craftsmen=43%; executor suffered 3 full-context prompt-cache rewrites in one session because parallel waves exceeded the 5-minute cache TTL; one oversized craftsman task took 53 requests and cost $1.62).
+
+- **Executor moved opus → sonnet:** coordination is mechanical once the architect plan exists; all spawn instructions (conductor, orchestrate command/skill) and the model-tier tables above updated in lockstep.
+- **Craftsman file-based reporting:** the full Craftsman Report now goes to `.claude/orchestra/reports/<task-id>.md`; the craftsman's return message is capped at ~5 lines (STATUS, one-sentence outcome, files changed, report path, needs-from-other-agents if any). Executor/parallel/ralph only open a report file for PARTIAL/BLOCKED tasks, merge conflicts, or sentinel-flagged findings — this was the main driver of the coordinator's 100–200k-token context.
+- **Wave sizing:** executor sizes parallel craftsman waves to complete within the ~5-minute prompt-cache TTL; prefers more/smaller waves and does interim validation work rather than idling across an expiring cache (a cold cache forces a full-context rewrite — measured ~380k cache-write tokens across 3 rewrites in one session).
+- **Architect task-size cap:** plan tasks are sized so one craftsman completes a task in roughly ≤15 tool calls (S/M); larger work is split into sequential subtasks with explicit handoff artifacts (an oversized task forces the craftsman to re-read its own growing transcript every turn — measured 3x average cost on a 53-request task).
+- **Conductor never implements:** in `standard`/`complex` flows the conductor must delegate application-code changes to craftsmen via executor rather than writing them itself — the main loop runs the most expensive model with the largest context (measured: a session where main implemented directly cost $13 of $16.5 total).
+
+`plugin.json` bumped `2.4.0` → `2.5.0`.

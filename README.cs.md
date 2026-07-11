@@ -251,7 +251,7 @@ Sentinel se spustí automaticky přes deep-review skill.
 │  scout (haiku) + scholar (haiku) + architect (opus)  │
 ├─────────────────────────────────────────────────────┤
 │               ORCHESTRATION LAYER                    │
-│   conductor (inherit/opus) + executor (opus)         │
+│   conductor (inherit/opus) + executor (sonnet)       │
 ├─────────────────────────────────────────────────────┤
 │                EXECUTION LAYER                       │
 │      craftsman (sonnet) + sentinel (sonnet)          │
@@ -264,8 +264,8 @@ Sentinel se spustí automaticky přes deep-review skill.
 |-------|-------|----------------|--------|
 | **conductor** | inherit/opus (blue) | Sisyphus | Orchestrátor — intent classification, dekompozice, delegace; může běžet jako `inherit` |
 | **architect** | opus (cyan) | Prometheus | Strategický plánovač — read-only, plány s file ownership |
-| **executor** | opus (green) | Atlas | Koordinátor — file claiming, parallel dispatch, wisdom |
-| **craftsman** | sonnet (green) | Hephaestus | Worker — OWNS/MUST NOT MODIFY, explore → implement → verify |
+| **executor** | sonnet (green) | Atlas | Koordinátor — file claiming, parallel dispatch, wisdom; koordinace je mechanická, jakmile existuje plán (naměřeno 27 % nákladů session na opusu) |
+| **craftsman** | sonnet (green) | Hephaestus | Worker — OWNS/MUST NOT MODIFY, explore → implement → verify → file report + shrnutí do 5 řádků |
 | **sentinel** | sonnet (red) | Momus | Reviewer — 80%+ confidence filtering, P0-P3, read-only; strukturovaný checklist nevyžaduje plný opus |
 | **scout** | haiku (yellow) | Explore | Průzkumník — read-only, strukturovaný report |
 | **scholar** | haiku (magenta) | Librarian | Researcher — Context7, web, read-only |

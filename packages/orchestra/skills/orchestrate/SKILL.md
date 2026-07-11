@@ -82,8 +82,8 @@ The orchestration layer manages execution — breaking the plan into parallel wo
 
 **Flow:**
 1. Conductor validates the plan and classifies intent
-2. Executor breaks plan phases into atomic tasks with file claiming
-3. Executor dispatches craftsmen with OWNS/MUST NOT MODIFY lists
+2. Executor (spawned with `model: "sonnet"` explicitly — coordination is mechanical once the plan exists) breaks plan phases into atomic tasks with file claiming
+3. Executor dispatches craftsmen with OWNS/MUST NOT MODIFY lists, sized so each parallel wave completes within the ~5-minute prompt-cache TTL
 4. Progress tracked via TaskCreate/TaskUpdate
 
 ### Layer 3: Execution
@@ -91,7 +91,7 @@ The orchestration layer manages execution — breaking the plan into parallel wo
 
 **Flow:**
 1. Craftsman agents implement assigned tasks (respecting file ownership)
-2. Each craftsman: explore → implement → self-verify → report
+2. Each craftsman: explore → implement → self-verify → write full report to `.claude/orchestra/reports/<task-id>.md`, return only a ≤5-line summary
 3. Sentinel reviews all changes (80%+ confidence filtering)
 4. P0/P1 issues → craftsman fixes (max 2 cycles)
 

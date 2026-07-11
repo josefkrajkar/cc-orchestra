@@ -45,12 +45,12 @@ Before dispatching any craftsman, ensure a specification exists:
 - Dependencies between tasks
 
 ### 5. Execution
-- Spawn **executor** with the specification
+- Spawn **executor** with the specification (pass `model: "sonnet"` explicitly in the Agent call — coordination is mechanical once the plan exists; frontmatter `model:` may be ignored in some Claude Code versions)
 - Executor coordinates **craftsman** agents for parallel implementation
 - Each craftsman gets OWNS + MUST NOT MODIFY lists
-- **Max 5-8 parallel craftsmen**
+- **Max 5-8 parallel craftsmen**, sized so each wave completes within the ~5-minute prompt-cache TTL
 - Track progress via TaskCreate/TaskUpdate
-- Executor accumulates wisdom and passes learnings forward
+- Executor accumulates wisdom and passes learnings forward by report path, not by quoting report bodies
 
 ### 6. Validation
 - Spawn **sentinel** to review all changes

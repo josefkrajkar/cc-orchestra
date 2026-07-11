@@ -73,6 +73,8 @@ Produce a structured plan with:
 - Dependencies: [what must complete first]
 - Risk: [potential issues]
 
+**Task sizing:** each task should be completable by a single craftsman in roughly ≤15 tool calls (size S/M). Split anything larger into sequential subtasks with explicit handoff artifacts — an oversized task forces the craftsman to re-read its own growing transcript every turn (measured: a 53-request task cost 3x the average).
+
 #### Phase 2: [Name]
 ...
 

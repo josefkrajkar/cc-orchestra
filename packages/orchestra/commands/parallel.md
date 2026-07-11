@@ -48,17 +48,19 @@ For each task, spawn a **craftsman** agent in parallel using the Agent tool. Eac
 - Conventions from the codebase (read wisdom if available)
 - **Applicable framework conventions** — explicitly cite every `conventions/*.md` file whose trigger matches the OWNS list (e.g. `conventions/react.md` when OWNS contains `*.tsx`/`*.jsx`). Pass these as hard constraints, not hints.
 - What other craftsmen are working on (awareness, not coordination)
+- **The report protocol**: write the full Craftsman Report to `.claude/orchestra/reports/<task-id>.md` and return only the ≤5-line summary (STATUS, one-sentence outcome, files changed, report path, needs-from-other-agents if any)
 
 **IMPORTANT:** Launch ALL craftsman agents in a single message with multiple Agent tool calls to ensure true parallel execution.
 
 **Hard limit: Max 5-8 parallel craftsmen.** If more tasks, batch them.
 
 ### Step 5: Collect Results
-As craftsmen complete, collect their Craftsman Reports:
+As craftsmen complete, verify from their ≤5-line summaries — do NOT read a report file for a DONE task:
 - What each accomplished
 - Files changed by each
-- Conventions discovered
 - Any needs from other agents (files outside ownership that need changes)
+
+Read `.claude/orchestra/reports/<task-id>.md` only when a task is PARTIAL/BLOCKED or a cross-cutting need flagged in the summary must be resolved.
 
 ### Step 6: Integration Check
 After all craftsmen complete:

@@ -226,7 +226,7 @@ Sentinel runs automatically via the deep-review skill.
 │           scout (haiku) + scholar (haiku) + architect (opus)           │
 ├───────────────────────────────────────────────────────────────────────┤
 │                          ORCHESTRATION LAYER                           │
-│               conductor (inherit/opus) + executor (opus)               │
+│                conductor (inherit/opus) + executor (sonnet)            │
 ├───────────────────────────────────────────────────────────────────────┤
 │                            EXECUTION LAYER                             │
 │  craftsman (sonnet) + sentinel (sonnet) + verifier (sonnet, optional)  │
@@ -239,8 +239,8 @@ Sentinel runs automatically via the deep-review skill.
 |---|---|---|---|
 | **conductor** | inherit/opus (blue) | Sisyphus | Orchestrator — intent classification, decomposition, delegation; may run as `inherit` |
 | **architect** | opus (cyan) | Prometheus | Strategic planner — read-only, plans with explicit file ownership |
-| **executor** | opus (green) | Atlas | Coordinator — file claiming, parallel dispatch, wisdom |
-| **craftsman** | sonnet (green) | Hephaestus | Worker — OWNS/MUST NOT MODIFY, explore → implement → verify |
+| **executor** | sonnet (green) | Atlas | Coordinator — file claiming, parallel dispatch, wisdom; mechanical once a plan exists (measured 27% of session cost on opus) |
+| **craftsman** | sonnet (green) | Hephaestus | Worker — OWNS/MUST NOT MODIFY, explore → implement → verify → file report + ≤5-line summary |
 | **sentinel** | sonnet (red) | Momus | Reviewer — 80%+ confidence filtering, P0-P3, read-only; a structured checklist review doesn't need full opus |
 | **verifier** | sonnet (orange) | — | Optional E2E verifier — stage 6.5, Playwright MCP via ToolSearch, fail-open SKIP, read-only + Bash; never in the default pipeline |
 | **scout** | haiku (yellow) | Explore | Explorer — read-only, structured report |

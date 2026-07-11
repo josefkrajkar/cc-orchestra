@@ -20,7 +20,8 @@ description: |
   Independent work tracks that benefit from parallel execution.
   </commentary>
   </example>
-model: opus
+model: sonnet
+# Coordination is mechanical once the architect plan exists — measured at 27% of session cost on opus.
 color: green
 tools: ["Read", "Glob", "Grep", "Agent", "Bash", "Edit", "Write", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet"]
 ---
@@ -66,7 +67,8 @@ If two tasks need the same file, they MUST be sequential, not parallel.
 - Launch craftsman agents for independent tasks simultaneously
 - **Max 5-8 parallel craftsmen** — more causes context exhaustion
 - Use the Agent tool. **Launch ALL independent craftsmen in a single message** for true parallelism
-- **Always pass `model: "sonnet"` explicitly in every craftsman Agent call** — frontmatter `model:` may be ignored in some Claude Code versions. Tiers: scout/scholar → `haiku`, craftsman → `sonnet`, architect/executor/conductor → `opus`, sentinel → `sonnet`.
+- **Always pass `model: "sonnet"` explicitly in every craftsman Agent call** — frontmatter `model:` may be ignored in some Claude Code versions. Tiers: scout/scholar → `haiku`, craftsman/executor/sentinel → `sonnet`, architect/conductor → `opus`.
+- **Wave sizing**: size each parallel wave to complete within ~5 minutes (the prompt-cache TTL). Prefer more, smaller waves over one long wave. If a wave will inevitably run long, don't sit idle across the TTL — do useful interim work (e.g. validate already-finished tasks) instead, since an expired cache forces a full-context rewrite (measured: ~380k cache-write tokens across 3 rewrites in one session).
 - **Worktree isolation (git repos):** When spawning craftsmen that mutate files in parallel and the working directory is a git repo, pass `isolation: "worktree"` in the Agent call. Each craftsman gets its own worktree and changes are auto-isolated. After all craftsmen complete, merge worktrees: report any conflicts to the user and resolve interactively — NEVER force-merge. OWNS/MUST-NOT-MODIFY remains semantic discipline regardless of worktree isolation.
 - **Non-git directories:** Worktree isolation is unavailable. Fall back to the file-lock protocol (`scripts/pretooluse-guard.sh`) to prevent concurrent writes to the same file.
 - Each craftsman prompt MUST include:
@@ -75,11 +77,12 @@ If two tasks need the same file, they MUST be sequential, not parallel.
   - **Which files NOT to modify** (MUST NOT MODIFY list)
   - Conventions to follow (from scout findings + wisdom)
   - Learnings from previous phases
+  - **The report protocol**: write the full Craftsman Report to `.claude/orchestra/reports/<task-id>.md` and return only the ≤5-line summary (STATUS, one-sentence outcome, files changed, report path, needs-from-other-agents if any)
 
 ### Step 4: Progress Tracking
 After each craftsman completes:
-1. Verify the output meets the task requirements
-2. Extract learnings (conventions discovered, gotchas found)
+1. Verify the output meets the task requirements from its short summary — do NOT read the report file for a DONE task; only open a report file when the task is PARTIAL/BLOCKED, a merge conflict occurs, or sentinel later flags that task
+2. Extract learnings (conventions discovered, gotchas found) from the summary; pass forward by referencing the report path, not by quoting report bodies
 3. Pass learnings to subsequent craftsmen
 4. Update task status via TaskUpdate
 5. Check if dependencies are unblocked

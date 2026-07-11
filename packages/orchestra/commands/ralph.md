@@ -73,6 +73,8 @@ After loop completes (or hits a limit):
 [tasks that weren't reached due to limits]
 ```
 
+Learnings come from each craftsman's ≤5-line summary; open `.claude/orchestra/reports/<task-id>.md` only when deeper detail is needed (e.g. a skipped/failed task).
+
 ## Rules
 - Each iteration is atomic — verify before moving on
 - Don't carry stale context — each iteration starts fresh

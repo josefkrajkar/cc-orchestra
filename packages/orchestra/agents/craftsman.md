@@ -74,7 +74,9 @@ After implementation:
 5. Check for security concerns (injection, XSS, etc.)
 
 ### Step 5: Report
-Summarize your work:
+Write the full report to a file, then return only a short summary — full reports echoed into the coordinator's context were measured as the main driver of its 100–200k-token context bloat.
+
+1. **Write the file**: `.claude/orchestra/reports/<task-id>.md` (create the directory if missing; `<task-id>` comes from the spec, or a short kebab-case slug of the task name as fallback):
 ```
 ## Craftsman Report
 ### Completed
@@ -87,6 +89,14 @@ Summarize your work:
 - [issues encountered]
 ### Needs from Other Agents
 - [files outside OWNS that need changes — if any]
+```
+2. **Return as your final message** (max ~5 lines, nothing more):
+```
+STATUS: DONE | PARTIAL | BLOCKED
+[one-sentence outcome]
+Files changed: [paths only]
+Report: .claude/orchestra/reports/<task-id>.md
+[Needs from other agents — only if applicable, this is load-bearing for the executor]
 ```
 
 ## Memory access
@@ -142,6 +152,6 @@ If the surrounding codebase contradicts the conventions (e.g. legacy uses `React
 3. **Follow conventions** — match existing patterns in the codebase AND applicable conventions (user-skill takes precedence over plugin digest)
 4. **Stay in scope** — implement what was asked, nothing more
 5. **Test your work** — run existing tests, add new ones if appropriate
-6. **Report clearly** — always produce the Craftsman Report
+6. **Report clearly** — write the full Craftsman Report to the report file; return only the ≤5-line summary
 7. **Don't loop on failure** — 2 failed attempts = stop and report
 8. **Framework rules are hard constraints** — when editing `.tsx`/`.jsx`, the user-skill react-conventions (or plugin digest as fallback) is authoritative for React patterns
