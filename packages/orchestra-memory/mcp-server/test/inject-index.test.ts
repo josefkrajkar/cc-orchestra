@@ -9,7 +9,7 @@ import { buildInjectIndex, runInject } from '../src/inject.js';
 /** Seeds one node with a single observation via direct repository calls
  * (bypassing memory_save/distillation) so tests get exact control over
  * scope, confidence, and valid_from ordering. */
-function seedFact(
+async function seedFact(
   repo: Repository,
   opts: {
     canonical: string;
@@ -19,14 +19,14 @@ function seedFact(
     confidence?: Confidence;
     validFrom: string;
   }
-): { nodeId: number; obsId: number } {
-  const node = repo.upsertNode({
+): Promise<{ nodeId: number; obsId: number }> {
+  const node = await repo.upsertNode({
     canonical: opts.canonical,
     kind: 'fact',
     scope: opts.scope,
     projectId: opts.projectId ?? null,
   });
-  const obsId = repo.addObservation({
+  const obsId = await repo.addObservation({
     nodeId: node.id,
     text: opts.text,
     scope: opts.scope,
@@ -48,18 +48,18 @@ describe('buildInjectIndex', () => {
     repo = createRepository(db);
   });
 
-  it('returns "" for an empty database', () => {
-    expect(buildInjectIndex(db, 'proj-empty-idx', 2000)).toBe('');
+  it('returns "" for an empty database', async () => {
+    expect(await buildInjectIndex(repo, 'proj-empty-idx', 2000)).toBe('');
   });
 
-  it('pins only high-confidence facts, cross-scope, capped at 8, most-recent first', () => {
+  it('pins only high-confidence facts, cross-scope, capped at 8, most-recent first', async () => {
     // 9 high-confidence facts spread across all three scopes visible to
     // proj-pin (3 project, 3 global, 3 private), staggered by day so a
     // strict recency order is unambiguous; the oldest of the 9 must be
     // dropped once capped at 8.
     const scopesInOrder: Scope[] = ['project', 'global', 'private', 'project', 'global', 'private', 'project', 'global', 'private'];
     for (let i = 0; i < 9; i++) {
-      seedFact(repo, {
+      await seedFact(repo, {
         canonical: `High Fact ${i}`,
         scope: scopesInOrder[i]!,
         projectId: scopesInOrder[i] === 'global' ? null : 'proj-pin',
@@ -70,7 +70,7 @@ describe('buildInjectIndex', () => {
     }
     // A newer, but only medium-confidence, fact must never be pinned even
     // though it's the most recent observation overall.
-    seedFact(repo, {
+    await seedFact(repo, {
       canonical: 'Medium Fact',
       scope: 'project',
       projectId: 'proj-pin',
@@ -79,7 +79,7 @@ describe('buildInjectIndex', () => {
       validFrom: day(20),
     });
     // A high-confidence fact from a different project must never be pinned.
-    seedFact(repo, {
+    await seedFact(repo, {
       canonical: 'Other Project High Fact',
       scope: 'project',
       projectId: 'proj-other',
@@ -88,7 +88,7 @@ describe('buildInjectIndex', () => {
       validFrom: day(30),
     });
 
-    const output = buildInjectIndex(db, 'proj-pin', 9500);
+    const output = await buildInjectIndex(repo, 'proj-pin', 9500);
     expect(output).toContain('## Pinned (high-confidence)');
 
     // Isolate the Pinned section (rendered "canonical: text" lines) from the
@@ -114,38 +114,38 @@ describe('buildInjectIndex', () => {
     expect(pinnedLines.length).toBe(8);
   });
 
-  it('lists an entity roster with correct counts, only valid+visible observations, isolated by scope', () => {
+  it('lists an entity roster with correct counts, only valid+visible observations, isolated by scope', async () => {
     // Node A: 2 valid + 1 invalidated observation for proj-a -> count 2.
-    const a = repo.upsertNode({ canonical: 'Node A', kind: 'fact', scope: 'project', projectId: 'proj-a' });
-    repo.addObservation({ nodeId: a.id, text: 'Node A fact one.', scope: 'project', projectId: 'proj-a', validFrom: day(1) });
-    repo.addObservation({ nodeId: a.id, text: 'Node A fact two.', scope: 'project', projectId: 'proj-a', validFrom: day(2) });
-    const aInvalidId = repo.addObservation({
+    const a = await repo.upsertNode({ canonical: 'Node A', kind: 'fact', scope: 'project', projectId: 'proj-a' });
+    await repo.addObservation({ nodeId: a.id, text: 'Node A fact one.', scope: 'project', projectId: 'proj-a', validFrom: day(1) });
+    await repo.addObservation({ nodeId: a.id, text: 'Node A fact two.', scope: 'project', projectId: 'proj-a', validFrom: day(2) });
+    const aInvalidId = await repo.addObservation({
       nodeId: a.id,
       text: 'Node A fact three (will be invalidated).',
       scope: 'project',
       projectId: 'proj-a',
       validFrom: day(3),
     });
-    repo.invalidateObservation(aInvalidId);
+    await repo.invalidateObservation(aInvalidId);
 
     // Node B: global, visible to any project.
-    const b = repo.upsertNode({ canonical: 'Node B', kind: 'fact', scope: 'global' });
-    repo.addObservation({ nodeId: b.id, text: 'Node B global fact.', scope: 'global', validFrom: day(4) });
+    const b = await repo.upsertNode({ canonical: 'Node B', kind: 'fact', scope: 'global' });
+    await repo.addObservation({ nodeId: b.id, text: 'Node B global fact.', scope: 'global', validFrom: day(4) });
 
     // Node C: another project's project-scoped fact — must not be visible to proj-a.
-    const c = repo.upsertNode({ canonical: 'Node C', kind: 'fact', scope: 'project', projectId: 'proj-other' });
-    repo.addObservation({ nodeId: c.id, text: 'Node C other-project fact.', scope: 'project', projectId: 'proj-other', validFrom: day(5) });
+    const c = await repo.upsertNode({ canonical: 'Node C', kind: 'fact', scope: 'project', projectId: 'proj-other' });
+    await repo.addObservation({ nodeId: c.id, text: 'Node C other-project fact.', scope: 'project', projectId: 'proj-other', validFrom: day(5) });
 
     // Node D: private to proj-a — must be visible/counted for proj-a.
-    const d = repo.upsertNode({ canonical: 'Node D', kind: 'fact', scope: 'private', projectId: 'proj-a' });
-    repo.addObservation({ nodeId: d.id, text: 'Node D private fact.', scope: 'private', projectId: 'proj-a', validFrom: day(6) });
+    const d = await repo.upsertNode({ canonical: 'Node D', kind: 'fact', scope: 'private', projectId: 'proj-a' });
+    await repo.addObservation({ nodeId: d.id, text: 'Node D private fact.', scope: 'private', projectId: 'proj-a', validFrom: day(6) });
 
     // Node E: only an invalidated observation -> zero valid observations, must not appear at all.
-    const e = repo.upsertNode({ canonical: 'Node E', kind: 'fact', scope: 'project', projectId: 'proj-a' });
-    const eObsId = repo.addObservation({ nodeId: e.id, text: 'Node E fact (will be invalidated).', scope: 'project', projectId: 'proj-a', validFrom: day(7) });
-    repo.invalidateObservation(eObsId);
+    const e = await repo.upsertNode({ canonical: 'Node E', kind: 'fact', scope: 'project', projectId: 'proj-a' });
+    const eObsId = await repo.addObservation({ nodeId: e.id, text: 'Node E fact (will be invalidated).', scope: 'project', projectId: 'proj-a', validFrom: day(7) });
+    await repo.invalidateObservation(eObsId);
 
-    const output = buildInjectIndex(db, 'proj-a', 9500);
+    const output = await buildInjectIndex(repo, 'proj-a', 9500);
     expect(output).toContain('## Entities (facts)');
     expect(output).toContain('node a (2)');
     expect(output).toContain('node b (1)');
@@ -155,15 +155,15 @@ describe('buildInjectIndex', () => {
 
     // A different project must never see proj-a's project/private facts,
     // but still sees the global one.
-    const otherOutput = buildInjectIndex(db, 'proj-other-idx', 9500);
+    const otherOutput = await buildInjectIndex(repo, 'proj-other-idx', 9500);
     expect(otherOutput).not.toContain('node a');
     expect(otherOutput).not.toContain('node d');
     expect(otherOutput).toContain('node b (1)');
   });
 
-  it('enforces the byte budget by dropping whole entities and appending the overflow marker', () => {
+  it('enforces the byte budget by dropping whole entities and appending the overflow marker', async () => {
     for (let i = 0; i < 30; i++) {
-      seedFact(repo, {
+      await seedFact(repo, {
         canonical: `Entity Number ${String(i).padStart(2, '0')}`,
         scope: 'project',
         projectId: 'proj-budget-idx',
@@ -174,7 +174,7 @@ describe('buildInjectIndex', () => {
     }
 
     const budget = 300;
-    const output = buildInjectIndex(db, 'proj-budget-idx', budget);
+    const output = await buildInjectIndex(repo, 'proj-budget-idx', budget);
 
     // The overflow marker itself (like buildInjectOutput's "[+N more facts]")
     // is appended after the budget check passes for all included items, so
@@ -199,7 +199,7 @@ describe('runInject --inject-mode dispatch', () => {
   let home: string;
   let originalHome: string | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalHome = process.env.HOME;
     home = mkdtempSync(join(tmpdir(), 'orchestra-inject-mode-home-'));
     process.env.HOME = home;
@@ -207,8 +207,8 @@ describe('runInject --inject-mode dispatch', () => {
     const db = openDb(defaultDbPath());
     try {
       const repo = createRepository(db);
-      const node = repo.upsertNode({ canonical: 'Runinject Sample', kind: 'fact', scope: 'global' });
-      repo.addObservation({
+      const node = await repo.upsertNode({ canonical: 'Runinject Sample', kind: 'fact', scope: 'global' });
+      await repo.addObservation({
         nodeId: node.id,
         text: 'A globally visible sample fact for runInject dispatch tests.',
         scope: 'global',
@@ -225,7 +225,7 @@ describe('runInject --inject-mode dispatch', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  function callInject(argv: string[]): string {
+  async function callInject(argv: string[]): Promise<string> {
     const stdoutChunks: string[] = [];
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as unknown as typeof process.exit);
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: unknown) => {
@@ -234,7 +234,7 @@ describe('runInject --inject-mode dispatch', () => {
     }) as typeof process.stdout.write);
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      runInject(argv);
+      await runInject(argv);
     } finally {
       exitSpy.mockRestore();
       stdoutSpy.mockRestore();
@@ -243,20 +243,20 @@ describe('runInject --inject-mode dispatch', () => {
     return stdoutChunks.join('');
   }
 
-  it('defaults to full-dump mode when --inject-mode is omitted', () => {
-    const output = callInject(['--inject', '--project-id', 'idx-dispatch-full']);
+  it('defaults to full-dump mode when --inject-mode is omitted', async () => {
+    const output = await callInject(['--inject', '--project-id', 'idx-dispatch-full']);
     expect(output).toMatch(/^# Graph memory \(project idx-dispatch-full\)/);
     expect(output).not.toContain('# Graph memory index');
   });
 
-  it('fails open to full-dump mode for an unknown --inject-mode value', () => {
-    const output = callInject(['--inject', '--project-id', 'idx-dispatch-bogus', '--inject-mode', 'bogus']);
+  it('fails open to full-dump mode for an unknown --inject-mode value', async () => {
+    const output = await callInject(['--inject', '--project-id', 'idx-dispatch-bogus', '--inject-mode', 'bogus']);
     expect(output).toMatch(/^# Graph memory \(project idx-dispatch-bogus\)/);
     expect(output).not.toContain('# Graph memory index');
   });
 
-  it('selects the index builder for --inject-mode index', () => {
-    const output = callInject(['--inject', '--project-id', 'idx-dispatch-index', '--inject-mode', 'index']);
+  it('selects the index builder for --inject-mode index', async () => {
+    const output = await callInject(['--inject', '--project-id', 'idx-dispatch-index', '--inject-mode', 'index']);
     expect(output).toMatch(/^# Graph memory index \(project idx-dispatch-index\)/);
     expect(output).toContain('## Entities (facts)');
     expect(output).toContain('runinject sample (1)');

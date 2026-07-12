@@ -1,11 +1,9 @@
 // memory_traverse — graph walk from a named entity out to a given depth,
 // resolving the entity by canonical name or alias without creating it.
 import { z } from 'zod';
-import type { SqliteDatabase } from '../db/connection.js';
 import type { Repository, Scope, SimilarNode } from '../db/repository.js';
 import { renderTraverse } from '../render.js';
 import { isPrivateDenied, privateDeniedMessage, resolveProjectId, type ToolContext } from './context.js';
-import { fetchVisibleEdges } from './search.js';
 import { LINE_FORMAT_NOTE, SCOPE_NOTE } from './descriptions.js';
 
 export const name = 'memory_traverse';
@@ -50,11 +48,11 @@ function normalize(name: string): string {
  * visible scopes (global, plus project/private for the caller's project) and
  * prefers an exact canonical match over a fuzzy one.
  */
-export function resolveEntityNode(
+export async function resolveEntityNode(
   repo: Repository,
   entity: string,
   projectId: string | null
-): SimilarNode | null {
+): Promise<SimilarNode | null> {
   const normalized = normalize(entity);
   const attempts: Array<{ scope: Scope; projectId: string | null }> = [{ scope: 'global', projectId: null }];
   if (projectId) {
@@ -63,7 +61,7 @@ export function resolveEntityNode(
   }
   const candidates: SimilarNode[] = [];
   for (const attempt of attempts) {
-    candidates.push(...repo.findSimilarNodes(entity, attempt.scope, attempt.projectId, 25));
+    candidates.push(...(await repo.findSimilarNodes(entity, attempt.scope, attempt.projectId, 25)));
   }
   if (candidates.length === 0) return null;
   return candidates.find((c) => c.canonical === normalized) ?? candidates[0] ?? null;
@@ -73,12 +71,11 @@ export interface TraverseOutput {
   text: string;
 }
 
-export function handleTraverse(
+export async function handleTraverse(
   repo: Repository,
-  db: SqliteDatabase,
   input: TraverseInput,
   ctx: ToolContext
-): TraverseOutput {
+): Promise<TraverseOutput> {
   const depth = Math.min(input.depth ?? 2, 4);
   const scopes = input.scope_filter as Scope[] | undefined;
   if (isPrivateDenied(ctx, scopes)) {
@@ -90,12 +87,12 @@ export function handleTraverse(
   }
   const projectId = resolved.projectId;
 
-  const root = resolveEntityNode(repo, input.entity, projectId);
+  const root = await resolveEntityNode(repo, input.entity, projectId);
   if (!root) {
     return { text: `No entity found matching "${input.entity}".` };
   }
 
-  const expanded = repo.expandFromNodes([root.id], depth, scopes, projectId);
+  const expanded = await repo.expandFromNodes([root.id], depth, scopes, projectId);
 
   // Cap the number of nodes handed to rendering so a broad hub can't dump an
   // unbounded node list on the caller. The root is always kept: if capping
@@ -117,7 +114,7 @@ export function handleTraverse(
   // the full-expansion edge list) is what keeps relations from referencing
   // nodes whose observations got dropped by the cap above.
   const nodeIds = nodesForRender.map((n) => n.id);
-  const edges = nodeIds.length > 0 ? fetchVisibleEdges(db, nodeIds, projectId) : [];
+  const edges = nodeIds.length > 0 ? await repo.fetchVisibleEdges(nodeIds, projectId) : [];
 
   let text = renderTraverse(root.canonical, depth, nodesForRender, edges, root.id);
   if (droppedCount > 0) {

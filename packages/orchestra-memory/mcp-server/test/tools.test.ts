@@ -27,7 +27,7 @@ const NO_PROJECT = ctxFor(null);
  * NEAR_DUP_RANK_THRESHOLD doc comment) and never clears the guard's
  * threshold. Seeding a handful of unrelated facts first gives BM25 the
  * topical diversity a real (non brand-new) project's memory would have. */
-function seedNearDupNoise(repo: Repository, db: SqliteDatabase, ctx: ToolContext, projectId: string): void {
+async function seedNearDupNoise(repo: Repository, ctx: ToolContext, projectId: string): Promise<void> {
   const noise = [
     'The team prefers dark mode enabled by default in the settings panel.',
     'Redis is used as the session store for the auth service in production.',
@@ -37,9 +37,8 @@ function seedNearDupNoise(repo: Repository, db: SqliteDatabase, ctx: ToolContext
     'Josef Krajkar maintains the Orchestra plugin project and lives in Prague.',
   ];
   for (const [i, text] of noise.entries()) {
-    handleSave(
+    await handleSave(
       repo,
-      db,
       { facts: [{ entity: { name: `Noise ${i}` }, text }], scope: 'project', project_id: projectId },
       ctx
     );
@@ -55,10 +54,9 @@ describe('mcp tools', () => {
     repo = createRepository(db);
   });
 
-  it('memory_save -> memory_search roundtrip, with dedupe and rejection', () => {
-    const saved = handleSave(
+  it('memory_save -> memory_search roundtrip, with dedupe and rejection', async () => {
+    const saved = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -85,9 +83,8 @@ describe('mcp tools', () => {
     expect(saved.facts[3]?.reason).toMatch(/exceeds 500 chars/);
 
     // Re-saving the exact same fact text is reported as a duplicate, not re-inserted.
-    const dup = handleSave(
+    const dup = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -105,7 +102,7 @@ describe('mcp tools', () => {
     // "sqlite" has no observations of its own (it only exists via the relation
     // below), so it can never FTS-match — expand:true is required to reach it
     // via 1-hop expansion from the matched "orchestra plugin" node.
-    const search = handleSearch(repo, db, { query: 'SQLite', expand: true }, NO_PROJECT);
+    const search = await handleSearch(repo, { query: 'SQLite', expand: true }, NO_PROJECT);
     // Entity canonical names are normalized (lowercase/trimmed) by the repository.
     expect(search.text).toContain('orchestra plugin: Orchestra plugin uses SQLite');
     expect(search.text).toContain('orchestra plugin -uses-> sqlite');
@@ -113,10 +110,9 @@ describe('mcp tools', () => {
     expect(search.text).toMatch(/^# Matches\n#\d+ \[global\|decision\|high\] /);
   });
 
-  it('rejects scope "project"/"private" without project_id', () => {
-    const result = handleSave(
+  it('rejects scope "project"/"private" without project_id', async () => {
+    const result = await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'X' }, text: 'A fact that should not be written anywhere.' }],
         scope: 'project',
@@ -127,10 +123,9 @@ describe('mcp tools', () => {
     expect(result.error).toMatch(/requires project_id/);
   });
 
-  it('scope isolation: private facts of project A are never visible to project B via memory_search', () => {
-    handleSave(
+  it('scope isolation: private facts of project A are never visible to project B via memory_search', async () => {
+    await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -144,21 +139,20 @@ describe('mcp tools', () => {
       ctxFor('proj-a')
     );
 
-    const asB = handleSearch(repo, db, { query: 'clientalpha', project_id: 'proj-b' }, ctxFor('proj-b'));
+    const asB = await handleSearch(repo, { query: 'clientalpha', project_id: 'proj-b' }, ctxFor('proj-b'));
     expect(asB.text).toBe('No matching facts found.');
 
-    const asNoProject = handleSearch(repo, db, { query: 'clientalpha' }, NO_PROJECT);
+    const asNoProject = await handleSearch(repo, { query: 'clientalpha' }, NO_PROJECT);
     expect(asNoProject.text).toBe('No matching facts found.');
 
-    const asA = handleSearch(repo, db, { query: 'clientalpha', project_id: 'proj-a' }, ctxFor('proj-a'));
+    const asA = await handleSearch(repo, { query: 'clientalpha', project_id: 'proj-a' }, ctxFor('proj-a'));
     expect(asA.text).toContain('clientalpha');
   });
 
-  it('memory_search default (expand:false) never renders "# Related (1 hop)", even when the matched node has neighbors with observations', () => {
+  it('memory_search default (expand:false) never renders "# Related (1 hop)", even when the matched node has neighbors with observations', async () => {
     const ctx = ctxFor('proj-search-noexpand');
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [
           { entity: { name: 'Root Entity' }, text: 'Root Entity has a unique marker keyword zzzrootmarker in it.' },
@@ -172,7 +166,7 @@ describe('mcp tools', () => {
       },
       ctx
     );
-    handleLink(
+    await handleLink(
       repo,
       {
         src: 'Root Entity',
@@ -185,9 +179,8 @@ describe('mcp tools', () => {
     );
 
     // No "expand" flag passed at all -> defaults to false.
-    const defaultSearch = handleSearch(
+    const defaultSearch = await handleSearch(
       repo,
-      db,
       { query: 'zzzrootmarker', project_id: 'proj-search-noexpand' },
       ctx
     );
@@ -199,11 +192,10 @@ describe('mcp tools', () => {
     expect(defaultSearch.text).not.toContain('root entity -relates_to-> neighbor entity');
   });
 
-  it('memory_search with expand:true caps related-node observations at RELATED_OBS_CAP, with an overflow marker', () => {
+  it('memory_search with expand:true caps related-node observations at RELATED_OBS_CAP, with an overflow marker', async () => {
     const ctx = ctxFor('proj-search-cap');
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Root Node' }, text: 'Root Node has the unique marker keyword yyyrootcap in it.' }],
         scope: 'project',
@@ -212,9 +204,8 @@ describe('mcp tools', () => {
       ctx
     );
     for (let i = 0; i < 4; i++) {
-      handleSave(
+      await handleSave(
         repo,
-        db,
         {
           facts: [
             { entity: { name: 'Hub Node' }, text: `Hub Node observation number ${i} describing distinct content.` },
@@ -225,15 +216,14 @@ describe('mcp tools', () => {
         ctx
       );
     }
-    handleLink(
+    await handleLink(
       repo,
       { src: 'Root Node', predicate: 'relates_to', dst: 'Hub Node', scope: 'project', project_id: 'proj-search-cap' },
       ctx
     );
 
-    const search = handleSearch(
+    const search = await handleSearch(
       repo,
-      db,
       { query: 'yyyrootcap', project_id: 'proj-search-cap', expand: true },
       ctx
     );
@@ -243,11 +233,10 @@ describe('mcp tools', () => {
     expect(search.text).toContain('(+1 more — memory_inspect "hub node")');
   });
 
-  it('memory_traverse caps expanded nodes via max_nodes, keeps the root, and never renders an edge to a dropped node', () => {
+  it('memory_traverse caps expanded nodes via max_nodes, keeps the root, and never renders an edge to a dropped node', async () => {
     const ctx = ctxFor('proj-traverse-cap');
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Hub Node' }, text: 'Hub Node is the root of a wide traversal test.' }],
         scope: 'project',
@@ -256,9 +245,8 @@ describe('mcp tools', () => {
       ctx
     );
     for (let i = 0; i < 8; i++) {
-      handleSave(
+      await handleSave(
         repo,
-        db,
         {
           facts: [
             { entity: { name: `Neighbor ${i}` }, text: `Neighbor ${i} is a leaf node reachable from the hub.` },
@@ -268,7 +256,7 @@ describe('mcp tools', () => {
         },
         ctx
       );
-      handleLink(
+      await handleLink(
         repo,
         {
           src: 'Hub Node',
@@ -281,9 +269,8 @@ describe('mcp tools', () => {
       );
     }
 
-    const traverse = handleTraverse(
+    const traverse = await handleTraverse(
       repo,
-      db,
       { entity: 'Hub Node', depth: 1, max_nodes: 5, project_id: 'proj-traverse-cap' },
       ctx
     );
@@ -307,10 +294,9 @@ describe('mcp tools', () => {
     }
   });
 
-  it('memory_link is idempotent and reused by memory_traverse for alias resolution', () => {
-    handleSave(
+  it('memory_link is idempotent and reused by memory_traverse for alias resolution', async () => {
+    await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -328,12 +314,12 @@ describe('mcp tools', () => {
       NO_PROJECT
     );
 
-    const firstLink = handleLink(
+    const firstLink = await handleLink(
       repo,
       { src: 'Josef Krajkar', predicate: 'maintains', dst: 'Orchestra plugin', scope: 'global' },
       NO_PROJECT
     );
-    const secondLink = handleLink(
+    const secondLink = await handleLink(
       repo,
       { src: 'Josef Krajkar', predicate: 'maintains', dst: 'Orchestra plugin', scope: 'global' },
       NO_PROJECT
@@ -343,19 +329,18 @@ describe('mcp tools', () => {
     expect(secondLink.edge.edgeId).toBe(firstLink.edge.edgeId);
 
     // Traverse resolves the entity via its alias "josef" (case/whitespace-insensitive).
-    const traverse = handleTraverse(repo, db, { entity: 'josef', depth: 1 }, NO_PROJECT);
+    const traverse = await handleTraverse(repo, { entity: 'josef', depth: 1 }, NO_PROJECT);
     expect(traverse.text).toContain('Josef Krajkar maintains the Orchestra plugin project');
     // Entity canonical names are normalized (lowercase/trimmed) by the repository.
     expect(traverse.text).toContain('josef krajkar -maintains-> orchestra plugin');
 
-    const notFound = handleTraverse(repo, db, { entity: 'nonexistent entity xyz' }, NO_PROJECT);
+    const notFound = await handleTraverse(repo, { entity: 'nonexistent entity xyz' }, NO_PROJECT);
     expect(notFound.text).toMatch(/No entity found/);
   });
 
-  it('memory_search never surfaces relation triples scoped to a different project', () => {
-    handleSave(
+  it('memory_search never surfaces relation triples scoped to a different project', async () => {
+    await handleSave(
       repo,
-      db,
       {
         facts: [
           { entity: { name: 'Service X' }, text: 'Service X handles payment processing for proj-a only.' },
@@ -365,7 +350,7 @@ describe('mcp tools', () => {
       },
       ctxFor('proj-a')
     );
-    handleLink(
+    await handleLink(
       repo,
       {
         src: 'Service X',
@@ -381,28 +366,25 @@ describe('mcp tools', () => {
     // requires 1-hop expansion from the matched "service x" node — exercise
     // the isolation property through that (riskier) expansion path rather
     // than the cheap same-node-only edge lookup.
-    const asA = handleSearch(
+    const asA = await handleSearch(
       repo,
-      db,
       { query: 'payment processing', project_id: 'proj-a', expand: true },
       ctxFor('proj-a')
     );
     expect(asA.text).toContain('service x -depends_on-> service y');
 
-    const asB = handleSearch(
+    const asB = await handleSearch(
       repo,
-      db,
       { query: 'payment processing', project_id: 'proj-b', expand: true },
       ctxFor('proj-b')
     );
     expect(asB.text).toBe('No matching facts found.');
   });
 
-  it('memory_invalidate by observation_id excludes the fact from later searches', () => {
+  it('memory_invalidate by observation_id excludes the fact from later searches', async () => {
     const ctx = ctxFor('proj-x');
-    const saved = handleSave(
+    const saved = await handleSave(
       repo,
-      db,
       {
         facts: [
           { entity: { name: 'Backend Framework' }, text: 'Project currently uses Express as its backend framework.' },
@@ -415,26 +397,24 @@ describe('mcp tools', () => {
     const observationId = saved.facts[0]?.observationId;
     expect(observationId).toBeDefined();
 
-    expect(handleSearch(repo, db, { query: 'Express', project_id: 'proj-x' }, ctx).text).toContain('Express');
+    expect((await handleSearch(repo, { query: 'Express', project_id: 'proj-x' }, ctx)).text).toContain('Express');
 
-    const invalidated = handleInvalidate(
+    const invalidated = await handleInvalidate(
       repo,
-      db,
       { observation_id: observationId!, reason: 'migrated to Hono' },
       ctx
     );
     expect(invalidated.invalidatedIds).toEqual([observationId]);
 
-    expect(handleSearch(repo, db, { query: 'Express', project_id: 'proj-x' }, ctx).text).toBe(
+    expect((await handleSearch(repo, { query: 'Express', project_id: 'proj-x' }, ctx)).text).toBe(
       'No matching facts found.'
     );
   });
 
-  it('memory_invalidate by entity invalidates every valid observation for that entity', () => {
+  it('memory_invalidate by entity invalidates every valid observation for that entity', async () => {
     const ctx = ctxFor('proj-y');
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [
           { entity: { name: 'Legacy Service' }, text: 'Legacy Service still runs on the old cluster today.' },
@@ -446,20 +426,19 @@ describe('mcp tools', () => {
       ctx
     );
 
-    const invalidated = handleInvalidate(repo, db, { entity: 'Legacy Service', project_id: 'proj-y' }, ctx);
+    const invalidated = await handleInvalidate(repo, { entity: 'Legacy Service', project_id: 'proj-y' }, ctx);
     expect(invalidated.invalidatedIds).toHaveLength(2);
 
-    expect(handleSearch(repo, db, { query: 'Legacy Service', project_id: 'proj-y' }, ctx).text).toBe(
+    expect((await handleSearch(repo, { query: 'Legacy Service', project_id: 'proj-y' }, ctx)).text).toBe(
       'No matching facts found.'
     );
   });
 
-  it('memory_invalidate by observation_id rejects cross-project invalidation', () => {
+  it('memory_invalidate by observation_id rejects cross-project invalidation', async () => {
     const ctxA = ctxFor('proj-inv-a');
     const ctxB = ctxFor('proj-inv-b');
-    const saved = handleSave(
+    const saved = await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'A Only Fact' }, text: 'This fact belongs only to project A.' }],
         scope: 'project',
@@ -469,36 +448,34 @@ describe('mcp tools', () => {
     );
     const observationId = saved.facts[0]?.observationId!;
 
-    const result = handleInvalidate(repo, db, { observation_id: observationId }, ctxB);
+    const result = await handleInvalidate(repo, { observation_id: observationId }, ctxB);
     expect(result.invalidatedIds).toEqual([]);
     expect(result.error).toMatch(/mismatch|different project/);
 
     // Fact must remain valid/visible to its own project afterwards.
-    expect(handleSearch(repo, db, { query: 'belongs only', project_id: 'proj-inv-a' }, ctxA).text).toContain(
+    expect((await handleSearch(repo, { query: 'belongs only', project_id: 'proj-inv-a' }, ctxA)).text).toContain(
       'This fact belongs only to project A.'
     );
   });
 
-  it('memory_stats reports scoped counts', () => {
-    handleSave(
+  it('memory_stats reports scoped counts', async () => {
+    await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Some Thing' }, text: 'Some thing exists globally for every project.' }],
         scope: 'global',
       },
       NO_PROJECT
     );
-    const stats = handleStats(repo, {}, NO_PROJECT);
+    const stats = await handleStats(repo, {}, NO_PROJECT);
     expect(stats.text).toContain('nodes: total=');
     expect(stats.text).toContain('observations: total=');
   });
 
-  it('wisdom_add -> wisdom_get roundtrip, grouped by category with a duplicate guard', () => {
+  it('wisdom_add -> wisdom_get roundtrip, grouped by category with a duplicate guard', async () => {
     const ctx = ctxFor('proj-w');
-    handleWisdomAdd(
+    await handleWisdomAdd(
       repo,
-      db,
       {
         text: 'Always use path aliases instead of relative ../../ imports in this project.',
         category: 'convention',
@@ -507,9 +484,8 @@ describe('mcp tools', () => {
       },
       ctx
     );
-    handleWisdomAdd(
+    await handleWisdomAdd(
       repo,
-      db,
       {
         text: 'Prisma generate must run before tsc or type errors appear unexpectedly.',
         category: 'gotcha',
@@ -518,9 +494,8 @@ describe('mcp tools', () => {
       ctx
     );
     // duplicate add should not create a second entry
-    handleWisdomAdd(
+    await handleWisdomAdd(
       repo,
-      db,
       {
         text: 'Always use path aliases instead of relative ../../ imports in this project.',
         category: 'convention',
@@ -529,7 +504,7 @@ describe('mcp tools', () => {
       ctx
     );
 
-    const wisdom = handleWisdomGet(db, { project_id: 'proj-w' }, ctx);
+    const wisdom = await handleWisdomGet(repo, { project_id: 'proj-w' }, ctx);
     expect(wisdom.text).toContain('Conventions');
     expect(wisdom.text).toContain('path aliases');
     expect(wisdom.text).toContain('Gotchas');
@@ -537,16 +512,15 @@ describe('mcp tools', () => {
     expect(wisdom.text.match(/path aliases/g)).toHaveLength(1);
 
     // wisdom from a different project must not leak in.
-    const otherProject = handleWisdomGet(db, { project_id: 'proj-other' }, ctxFor('proj-other'));
+    const otherProject = await handleWisdomGet(repo, { project_id: 'proj-other' }, ctxFor('proj-other'));
     expect(otherProject.text).not.toContain('path aliases');
   });
 
-  it('wisdom_get: "limit" truncates with a hint; "category" narrows to a single category', () => {
+  it('wisdom_get: "limit" truncates with a hint; "category" narrows to a single category', async () => {
     const ctx = ctxFor('proj-wisdom-limit');
     for (let i = 0; i < 5; i++) {
-      handleWisdomAdd(
+      await handleWisdomAdd(
         repo,
-        db,
         {
           text: `Distinct convention entry number ${i} for limit testing.`,
           category: 'convention',
@@ -555,71 +529,67 @@ describe('mcp tools', () => {
         ctx
       );
     }
-    handleWisdomAdd(
+    await handleWisdomAdd(
       repo,
-      db,
       { text: 'A single gotcha entry for category filtering.', category: 'gotcha', project_id: 'proj-wisdom-limit' },
       ctx
     );
 
     // 6 total entries, limit:2 -> only 2 rendered, hint reports the other 4.
-    const limited = handleWisdomGet(db, { project_id: 'proj-wisdom-limit', limit: 2 }, ctx);
+    const limited = await handleWisdomGet(repo, { project_id: 'proj-wisdom-limit', limit: 2 }, ctx);
     expect(limited.text).toContain('[+4 more — raise limit or filter by category]');
     const renderedConventions =
       limited.text.match(/Distinct convention entry number \d for limit testing\./g) ?? [];
     const renderedGotchas = limited.text.match(/A single gotcha entry for category filtering\./g) ?? [];
     expect(renderedConventions.length + renderedGotchas.length).toBe(2);
 
-    const gotchaOnly = handleWisdomGet(db, { project_id: 'proj-wisdom-limit', category: 'gotcha' }, ctx);
+    const gotchaOnly = await handleWisdomGet(repo, { project_id: 'proj-wisdom-limit', category: 'gotcha' }, ctx);
     expect(gotchaOnly.text).toContain('A single gotcha entry for category filtering.');
     expect(gotchaOnly.text).not.toContain('Distinct convention entry');
     expect(gotchaOnly.text).not.toContain('[+');
   });
 
-  it('wisdom_add defaults to project scope (not global) and requires explicit opt-in for global', () => {
+  it('wisdom_add defaults to project scope (not global) and requires explicit opt-in for global', async () => {
     const ctx = ctxFor('proj-wisdom-default');
-    handleWisdomAdd(repo, db, { text: 'Project-scoped wisdom by default text.', category: 'convention' }, ctx);
+    await handleWisdomAdd(repo, { text: 'Project-scoped wisdom by default text.', category: 'convention' }, ctx);
 
-    const own = handleWisdomGet(db, {}, ctx);
+    const own = await handleWisdomGet(repo, {}, ctx);
     expect(own.text).toContain('Project-scoped wisdom by default text');
 
     const otherCtx = ctxFor('proj-other-wisdom-default');
-    const other = handleWisdomGet(db, {}, otherCtx);
+    const other = await handleWisdomGet(repo, {}, otherCtx);
     expect(other.text).not.toContain('Project-scoped wisdom by default text');
 
     // Explicit opt-in to global scope shares it everywhere.
-    handleWisdomAdd(
+    await handleWisdomAdd(
       repo,
-      db,
       { text: 'Globally-shared wisdom via explicit opt-in text.', category: 'convention', scope: 'global' },
       ctx
     );
-    const otherAfterGlobal = handleWisdomGet(db, {}, otherCtx);
+    const otherAfterGlobal = await handleWisdomGet(repo, {}, otherCtx);
     expect(otherAfterGlobal.text).toContain('Globally-shared wisdom via explicit opt-in text');
   });
 
-  it('wisdom_add/get round-trip private scope, confined to the owning project', () => {
+  it('wisdom_add/get round-trip private scope, confined to the owning project', async () => {
     const ctx = ctxFor('proj-wisdom-private');
-    handleWisdomAdd(
+    await handleWisdomAdd(
       repo,
-      db,
       { text: 'Client-confidential wisdom fact text.', category: 'gotcha', scope: 'private' },
       ctx
     );
 
-    const own = handleWisdomGet(db, {}, ctx);
+    const own = await handleWisdomGet(repo, {}, ctx);
     expect(own.text).toContain('Client-confidential wisdom fact text');
 
     const otherCtx = ctxFor('proj-other-wisdom-private');
-    const other = handleWisdomGet(db, {}, otherCtx);
+    const other = await handleWisdomGet(repo, {}, otherCtx);
     expect(other.text).not.toContain('Client-confidential wisdom fact text');
   });
 
-  it('memory_save supersession: excludes the old fact from search and memory_inspect shows the chain', () => {
+  it('memory_save supersession: excludes the old fact from search and memory_inspect shows the chain', async () => {
     const ctx = ctxFor('proj-super');
-    const saved = handleSave(
+    const saved = await handleSave(
       repo,
-      db,
       {
         facts: [
           { entity: { name: 'Backend Framework' }, text: 'Project currently uses Express as its backend framework.' },
@@ -632,9 +602,8 @@ describe('mcp tools', () => {
     const oldId = saved.facts[0]?.observationId;
     expect(oldId).toBeDefined();
 
-    const replaced = handleSave(
+    const replaced = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -652,22 +621,21 @@ describe('mcp tools', () => {
     expect(replaced.facts[0]?.supersededId).toBe(oldId);
     expect(replaced.text).toContain(`superseded #${oldId}`);
 
-    const search = handleSearch(repo, db, { query: 'framework', project_id: 'proj-super' }, ctx);
+    const search = await handleSearch(repo, { query: 'framework', project_id: 'proj-super' }, ctx);
     expect(search.text).not.toContain('Express');
     expect(search.text).toContain('Hono');
 
-    const inspect = handleInspect(db, { project_id: 'proj-super', entity: 'Backend Framework' }, ctx);
+    const inspect = await handleInspect(repo, { project_id: 'proj-super', entity: 'Backend Framework' }, ctx);
     expect(inspect.text).toMatch(/superseded by #\d+/);
     expect(inspect.text).toContain('Express');
   });
 
-  it('memory_save rejects an invalid supersedes_observation_id (missing or cross-project)', () => {
+  it('memory_save rejects an invalid supersedes_observation_id (missing or cross-project)', async () => {
     const ctxA = ctxFor('proj-super-a');
     const ctxB = ctxFor('proj-super-b');
 
-    const missing = handleSave(
+    const missing = await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'X' }, text: 'A fact that references a bogus supersede id.', supersedes_observation_id: 999999 }],
         scope: 'project',
@@ -678,9 +646,8 @@ describe('mcp tools', () => {
     expect(missing.facts[0]?.status).toBe('rejected');
     expect(missing.facts[0]?.reason).toMatch(/does not exist/);
 
-    const savedA = handleSave(
+    const savedA = await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Cross Project Thing' }, text: 'proj-a fact about a cross project thing.' }],
         scope: 'project',
@@ -690,9 +657,8 @@ describe('mcp tools', () => {
     );
     const aObsId = savedA.facts[0]?.observationId!;
 
-    const crossProject = handleSave(
+    const crossProject = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -713,9 +679,8 @@ describe('mcp tools', () => {
     // in the victim's project_id and supersede their project-scoped fact —
     // ownership is checked against the server's own identity, and global
     // facts ignore caller-supplied project_id entirely.
-    const globalBypass = handleSave(
+    const globalBypass = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -733,12 +698,11 @@ describe('mcp tools', () => {
     expect(globalBypass.facts[0]?.reason).toMatch(/not visible/);
   });
 
-  it('Finding 1: rejects a caller-supplied project_id that differs from this server instance\'s own identity', () => {
+  it('Finding 1: rejects a caller-supplied project_id that differs from this server instance\'s own identity', async () => {
     const ctx = ctxFor('proj-own');
 
-    const saveResult = handleSave(
+    const saveResult = await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Y' }, text: 'Attempted cross-project write should never land.' }],
         scope: 'project',
@@ -749,18 +713,17 @@ describe('mcp tools', () => {
     expect(saveResult.summary.saved).toBe(0);
     expect(saveResult.error).toMatch(/project_id mismatch/);
 
-    const searchResult = handleSearch(repo, db, { query: 'Attempted', project_id: 'proj-other' }, ctx);
+    const searchResult = await handleSearch(repo, { query: 'Attempted', project_id: 'proj-other' }, ctx);
     expect(searchResult.text).toMatch(/project_id mismatch/);
 
-    const statsResult = handleStats(repo, { project_id: 'proj-other' }, ctx);
+    const statsResult = await handleStats(repo, { project_id: 'proj-other' }, ctx);
     expect(statsResult.text).toMatch(/project_id mismatch/);
   });
 
-  it('Finding 1: omitting project_id defaults to this server instance\'s own project identity', () => {
+  it('Finding 1: omitting project_id defaults to this server instance\'s own project identity', async () => {
     const ctx = ctxFor('proj-default');
-    const saved = handleSave(
+    const saved = await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Default Proj Fact' }, text: 'This fact should land under the default project id.' }],
         scope: 'project',
@@ -769,14 +732,13 @@ describe('mcp tools', () => {
     );
     expect(saved.summary.saved).toBe(1);
 
-    const search = handleSearch(repo, db, { query: 'default project id' }, ctx);
+    const search = await handleSearch(repo, { query: 'default project id' }, ctx);
     expect(search.text).toContain('This fact should land under the default project id.');
   });
 
-  it('Finding 1: fails closed for private scope when this server instance has no project identity', () => {
-    const saved = handleSave(
+  it('Finding 1: fails closed for private scope when this server instance has no project identity', async () => {
+    const saved = await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Z' }, text: 'Should never be saved as private with no project identity.' }],
         scope: 'private',
@@ -786,25 +748,23 @@ describe('mcp tools', () => {
     expect(saved.summary.saved).toBe(0);
     expect(saved.error).toMatch(/no project identity/);
 
-    const search = handleSearch(repo, db, { query: 'anything', scope_filter: ['private'] }, NO_PROJECT);
+    const search = await handleSearch(repo, { query: 'anything', scope_filter: ['private'] }, NO_PROJECT);
     expect(search.text).toMatch(/no project identity/);
   });
 
-  it('buildInjectOutput orders by confidence/recency and returns "" when nothing to inject', () => {
-    expect(buildInjectOutput(db, 'proj-empty', 9500)).toBe('');
+  it('buildInjectOutput orders by confidence/recency and returns "" when nothing to inject', async () => {
+    expect(await buildInjectOutput(repo, 'proj-empty', 9500)).toBe('');
 
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Global Pref' }, text: 'The user prefers concise commit messages in general.' }],
         scope: 'global',
       },
       NO_PROJECT
     );
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Proj Fact' }, text: 'This project uses pnpm as its package manager exclusively.' }],
         scope: 'project',
@@ -812,9 +772,8 @@ describe('mcp tools', () => {
       },
       ctxFor('proj-inject')
     );
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [{ entity: { name: 'Proj Secret' }, text: 'This client requested no third-party analytics tools at all.' }],
         scope: 'private',
@@ -823,7 +782,7 @@ describe('mcp tools', () => {
       ctxFor('proj-inject')
     );
 
-    const output = buildInjectOutput(db, 'proj-inject', 9500);
+    const output = await buildInjectOutput(repo, 'proj-inject', 9500);
     expect(output).toContain('## Project facts');
     expect(output).toContain('pnpm');
     expect(output).toContain('## Global facts');
@@ -833,17 +792,16 @@ describe('mcp tools', () => {
     expect(output).not.toContain('more facts');
 
     // A different project must never see proj-inject's private/project facts.
-    const otherOutput = buildInjectOutput(db, 'proj-other-inject', 9500);
+    const otherOutput = await buildInjectOutput(repo, 'proj-other-inject', 9500);
     expect(otherOutput).not.toContain('pnpm');
     expect(otherOutput).not.toContain('third-party analytics');
     expect(otherOutput).toContain('concise commit messages'); // global still surfaces
   });
 
-  it('buildInjectOutput enforces the byte budget by truncating whole facts, never mid-line', () => {
+  it('buildInjectOutput enforces the byte budget by truncating whole facts, never mid-line', async () => {
     for (let i = 0; i < 25; i++) {
-      handleSave(
+      await handleSave(
         repo,
-        db,
         {
           facts: [
             {
@@ -858,7 +816,7 @@ describe('mcp tools', () => {
       );
     }
 
-    const truncated = buildInjectOutput(db, 'proj-budget', 400);
+    const truncated = await buildInjectOutput(repo, 'proj-budget', 400);
     expect(Buffer.byteLength(truncated, 'utf8')).toBeLessThan(500);
     expect(truncated).toMatch(/\[\+\d+ more facts — use memory_search\]/);
 
@@ -895,12 +853,11 @@ describe('mcp tools', () => {
     }
   });
 
-  it('memory_save near-duplicate guard: flags a high-overlap restatement, no new observation is created', () => {
+  it('memory_save near-duplicate guard: flags a high-overlap restatement, no new observation is created', async () => {
     const ctx = ctxFor('proj-neardup');
-    seedNearDupNoise(repo, db, ctx, 'proj-neardup');
-    const first = handleSave(
+    await seedNearDupNoise(repo, ctx, 'proj-neardup');
+    const first = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -916,9 +873,8 @@ describe('mcp tools', () => {
     const originalId = first.facts[0]?.observationId;
     expect(originalId).toBeDefined();
 
-    const restated = handleSave(
+    const restated = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -938,17 +894,16 @@ describe('mcp tools', () => {
     expect(restated.text).toContain(`near-duplicate of [obs#${originalId}]`);
 
     // No new observation was inserted — the node still has exactly one.
-    const inspect = handleInspect(db, { project_id: 'proj-neardup', entity: 'Storage Backend' }, ctx);
+    const inspect = await handleInspect(repo, { project_id: 'proj-neardup', entity: 'Storage Backend' }, ctx);
     const obsCount = (inspect.text.match(/^- \*\*#\d+\*\*/gm) ?? []).length;
     expect(obsCount).toBe(1);
   });
 
-  it('memory_save near-duplicate guard: allow_near_duplicate:true overrides and saves anyway', () => {
+  it('memory_save near-duplicate guard: allow_near_duplicate:true overrides and saves anyway', async () => {
     const ctx = ctxFor('proj-neardup-allow');
-    seedNearDupNoise(repo, db, ctx, 'proj-neardup-allow');
-    handleSave(
+    await seedNearDupNoise(repo, ctx, 'proj-neardup-allow');
+    await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -962,9 +917,8 @@ describe('mcp tools', () => {
       ctx
     );
 
-    const overridden = handleSave(
+    const overridden = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -983,12 +937,11 @@ describe('mcp tools', () => {
     expect(overridden.summary.nearDuplicate).toBe(0);
   });
 
-  it('memory_save near-duplicate guard: supersedes_observation_id bypasses the guard and invalidates the original', () => {
+  it('memory_save near-duplicate guard: supersedes_observation_id bypasses the guard and invalidates the original', async () => {
     const ctx = ctxFor('proj-neardup-supersede');
-    seedNearDupNoise(repo, db, ctx, 'proj-neardup-supersede');
-    const first = handleSave(
+    await seedNearDupNoise(repo, ctx, 'proj-neardup-supersede');
+    const first = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1003,9 +956,8 @@ describe('mcp tools', () => {
     );
     const originalId = first.facts[0]?.observationId!;
 
-    const superseded = handleSave(
+    const superseded = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1022,19 +974,18 @@ describe('mcp tools', () => {
     expect(superseded.facts[0]?.status).toBe('saved');
     expect(superseded.facts[0]?.supersededId).toBe(originalId);
 
-    const inspect = handleInspect(
-      db,
+    const inspect = await handleInspect(
+      repo,
       { project_id: 'proj-neardup-supersede', entity: 'Storage Backend' },
       ctx
     );
     expect(inspect.text).toMatch(/superseded by #\d+/);
   });
 
-  it('memory_save near-duplicate guard: a dissimilar fact on the same entity is saved normally', () => {
+  it('memory_save near-duplicate guard: a dissimilar fact on the same entity is saved normally', async () => {
     const ctx = ctxFor('proj-neardup-dissimilar');
-    handleSave(
+    await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1048,9 +999,8 @@ describe('mcp tools', () => {
       ctx
     );
 
-    const unrelated = handleSave(
+    const unrelated = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1068,11 +1018,10 @@ describe('mcp tools', () => {
     expect(unrelated.summary.nearDuplicate).toBe(0);
   });
 
-  it('memory_save near-duplicate guard: scope isolation — another project\'s near-identical fact never triggers the guard', () => {
-    seedNearDupNoise(repo, db, ctxFor('proj-neardup-iso-a'), 'proj-neardup-iso-a');
-    const withinA = handleSave(
+  it('memory_save near-duplicate guard: scope isolation — another project\'s near-identical fact never triggers the guard', async () => {
+    await seedNearDupNoise(repo, ctxFor('proj-neardup-iso-a'), 'proj-neardup-iso-a');
+    const withinA = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1088,9 +1037,8 @@ describe('mcp tools', () => {
     // Sanity: within project A, with the same noise corpus, this restatement
     // pair genuinely triggers the guard (proves the isolation check below is
     // testing something real, not just an always-weak signal).
-    const restatedWithinA = handleSave(
+    const restatedWithinA = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1106,9 +1054,8 @@ describe('mcp tools', () => {
     expect(restatedWithinA.facts[0]?.status).toBe('near_duplicate');
     expect(withinA.facts[0]?.observationId).toBeDefined();
 
-    const otherProject = handleSave(
+    const otherProject = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1125,11 +1072,10 @@ describe('mcp tools', () => {
     expect(otherProject.summary.nearDuplicate).toBe(0);
   });
 
-  it('memory_save: an exact-normalized duplicate still short-circuits as "duplicate", not "near_duplicate"', () => {
+  it('memory_save: an exact-normalized duplicate still short-circuits as "duplicate", not "near_duplicate"', async () => {
     const ctx = ctxFor('proj-exact-vs-near');
-    const first = handleSave(
+    const first = await handleSave(
       repo,
-      db,
       {
         facts: [
           {
@@ -1144,9 +1090,8 @@ describe('mcp tools', () => {
     );
     const originalId = first.facts[0]?.observationId;
 
-    const exact = handleSave(
+    const exact = await handleSave(
       repo,
-      db,
       {
         facts: [
           {

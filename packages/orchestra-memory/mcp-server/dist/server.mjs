@@ -2235,8 +2235,8 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize4) {
-      if (normalize4 !== false)
+    function getFullPath(resolver, id = "", normalize3) {
+      if (normalize3 !== false)
         id = normalizeId(id);
       const p = resolver.parse(id);
       return _getFullPath(resolver, p);
@@ -3632,7 +3632,7 @@ var require_fast_uri = __commonJS({
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
-    function normalize4(uri, options) {
+    function normalize3(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
         normalizeString(uri, options);
@@ -3899,7 +3899,7 @@ var require_fast_uri = __commonJS({
     }
     var fastUri = {
       SCHEMES,
-      normalize: normalize4,
+      normalize: normalize3,
       resolve,
       resolveComponent,
       equal,
@@ -7380,15 +7380,15 @@ var makeIssue = (params) => {
       message: issueData.message
     };
   }
-  let errorMessage3 = "";
+  let errorMessage4 = "";
   const maps = errorMaps.filter((m) => !!m).slice().reverse();
   for (const map of maps) {
-    errorMessage3 = map(fullIssue, { data, defaultError: errorMessage3 }).message;
+    errorMessage4 = map(fullIssue, { data, defaultError: errorMessage4 }).message;
   }
   return {
     ...issueData,
     path: fullPath,
-    message: errorMessage3
+    message: errorMessage4
   };
 };
 var EMPTY_PATH = [];
@@ -17210,19 +17210,19 @@ var getRefs = (options) => {
 };
 
 // node_modules/zod-to-json-schema/dist/esm/errorMessages.js
-function addErrorMessage(res, key, errorMessage3, refs) {
+function addErrorMessage(res, key, errorMessage4, refs) {
   if (!refs?.errorMessages)
     return;
-  if (errorMessage3) {
+  if (errorMessage4) {
     res.errorMessage = {
       ...res.errorMessage,
-      [key]: errorMessage3
+      [key]: errorMessage4
     };
   }
 }
-function setResponseValueAndErrors(res, key, value, errorMessage3, refs) {
+function setResponseValueAndErrors(res, key, value, errorMessage4, refs) {
   res[key] = value;
-  addErrorMessage(res, key, errorMessage3, refs);
+  addErrorMessage(res, key, errorMessage4, refs);
 }
 
 // node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
@@ -18533,8 +18533,8 @@ var Protocol = class {
                   if (queuedMessage.type === "response") {
                     resolver(message);
                   } else {
-                    const errorMessage3 = message;
-                    const error2 = new McpError(errorMessage3.error.code, errorMessage3.error.message, errorMessage3.error.data);
+                    const errorMessage4 = message;
+                    const error2 = new McpError(errorMessage4.error.code, errorMessage4.error.message, errorMessage4.error.data);
                     resolver(error2);
                   }
                 } else {
@@ -19834,23 +19834,23 @@ var Server = class extends Protocol {
       const wrappedHandler = async (request, extra) => {
         const validatedRequest = safeParse2(CallToolRequestSchema, request);
         if (!validatedRequest.success) {
-          const errorMessage3 = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call request: ${errorMessage3}`);
+          const errorMessage4 = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call request: ${errorMessage4}`);
         }
         const { params } = validatedRequest.data;
         const result = await Promise.resolve(handler(request, extra));
         if (params.task) {
           const taskValidationResult = safeParse2(CreateTaskResultSchema, result);
           if (!taskValidationResult.success) {
-            const errorMessage3 = taskValidationResult.error instanceof Error ? taskValidationResult.error.message : String(taskValidationResult.error);
-            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage3}`);
+            const errorMessage4 = taskValidationResult.error instanceof Error ? taskValidationResult.error.message : String(taskValidationResult.error);
+            throw new McpError(ErrorCode.InvalidParams, `Invalid task creation result: ${errorMessage4}`);
           }
           return taskValidationResult.data;
         }
         const validationResult = safeParse2(CallToolResultSchema, result);
         if (!validationResult.success) {
-          const errorMessage3 = validationResult.error instanceof Error ? validationResult.error.message : String(validationResult.error);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call result: ${errorMessage3}`);
+          const errorMessage4 = validationResult.error instanceof Error ? validationResult.error.message : String(validationResult.error);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid tools/call result: ${errorMessage4}`);
         }
         return validationResult.data;
       };
@@ -20344,12 +20344,12 @@ var McpServer = class {
    * @param errorMessage - The error message.
    * @returns The tool error result.
    */
-  createToolError(errorMessage3) {
+  createToolError(errorMessage4) {
     return {
       content: [
         {
           type: "text",
-          text: errorMessage3
+          text: errorMessage4
         }
       ],
       isError: true
@@ -20367,8 +20367,8 @@ var McpServer = class {
     const parseResult = await safeParseAsync2(schemaToParse, args);
     if (!parseResult.success) {
       const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
-      const errorMessage3 = getParseErrorMessage(error2);
-      throw new McpError(ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${toolName}: ${errorMessage3}`);
+      const errorMessage4 = getParseErrorMessage(error2);
+      throw new McpError(ErrorCode.InvalidParams, `Input validation error: Invalid arguments for tool ${toolName}: ${errorMessage4}`);
     }
     return parseResult.data;
   }
@@ -20392,8 +20392,8 @@ var McpServer = class {
     const parseResult = await safeParseAsync2(outputObj, result.structuredContent);
     if (!parseResult.success) {
       const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
-      const errorMessage3 = getParseErrorMessage(error2);
-      throw new McpError(ErrorCode.InvalidParams, `Output validation error: Invalid structured content for tool ${toolName}: ${errorMessage3}`);
+      const errorMessage4 = getParseErrorMessage(error2);
+      throw new McpError(ErrorCode.InvalidParams, `Output validation error: Invalid structured content for tool ${toolName}: ${errorMessage4}`);
     }
   }
   /**
@@ -20605,8 +20605,8 @@ var McpServer = class {
         const parseResult = await safeParseAsync2(argsObj, request.params.arguments);
         if (!parseResult.success) {
           const error2 = "error" in parseResult ? parseResult.error : "Unknown error";
-          const errorMessage3 = getParseErrorMessage(error2);
-          throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for prompt ${request.params.name}: ${errorMessage3}`);
+          const errorMessage4 = getParseErrorMessage(error2);
+          throw new McpError(ErrorCode.InvalidParams, `Invalid arguments for prompt ${request.params.name}: ${errorMessage4}`);
         }
         const args = parseResult.data;
         const cb = prompt.callback;
@@ -21104,15 +21104,47 @@ var StdioServerTransport = class {
 // src/db/connection.ts
 import { createRequire } from "node:module";
 import { mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { dirname, join as join2 } from "node:path";
 import { fileURLToPath } from "node:url";
+
+// src/config.ts
+import { join } from "node:path";
+import { homedir } from "node:os";
+function getDbPath() {
+  const override = process.env.ORCHESTRA_MEMORY_DB_PATH;
+  if (override) return override;
+  return join(homedir(), ".claude", "orchestra-memory", "graph.db");
+}
+function getRemoteUrl() {
+  return process.env.ORCHESTRA_MEMORY_URL || void 0;
+}
+function getClientToken() {
+  return process.env.ORCHESTRA_MEMORY_TOKEN || void 0;
+}
+function getTimeoutMs(defaultMs) {
+  const raw = process.env.ORCHESTRA_MEMORY_TIMEOUT_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultMs;
+}
+function getListenAddress() {
+  return process.env.ORCHESTRA_MEMORY_LISTEN || "127.0.0.1:8787";
+}
+function getServerToken() {
+  return process.env.ORCHESTRA_MEMORY_SERVER_TOKEN || void 0;
+}
+function getAllowedOrigins() {
+  const raw = process.env.ORCHESTRA_MEMORY_ALLOWED_ORIGINS;
+  if (!raw) return [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+// src/db/connection.ts
 var require_ = createRequire(import.meta.url);
 var moduleDir = dirname(fileURLToPath(import.meta.url));
-var SCHEMA_PATH = join(moduleDir, "schema.sql");
+var SCHEMA_PATH = join2(moduleDir, "schema.sql");
 var SCHEMA_VERSION = "1";
 function defaultDbPath() {
-  return join(homedir(), ".claude", "orchestra-memory", "graph.db");
+  return getDbPath();
 }
 function tryOpenDb(dbPath = defaultDbPath()) {
   let DatabaseSync;
@@ -21202,8 +21234,37 @@ function scopeAllowlist(alias, scopes) {
   return { sql: `${alias}.scope IN (${placeholders})`, params: [...scopes] };
 }
 var EMPTY_SCOPE_COUNTS = () => ({ global: 0, project: 0, private: 0 });
+var MIN_TOKEN_LEN = 4;
+var CANDIDATE_WORD_CAP = 20;
+var MIN_ANCHOR_WORDS = 3;
+var MAX_ANCHOR_WORDS = 6;
+var ANCHOR_DF_SEARCH_LIMIT = 50;
+var NEAR_DUP_RANK_THRESHOLD = -3.5;
+var STOPWORDS = new Set(
+  `a an the and or but if then else for nor so yet
+   of to in on at by with from into onto up down out over under again further
+   is are was were be been being have has had do does did doing will would
+   shall should may might must can could this that these those it its
+   as not no never always about above below between through during before
+   after once here there when where why how all any both each few more most
+   other some such only own same than too very just also across still
+   i you he she we they them his her our your their what which who whom
+   because while against without within per via etc used use uses using`.split(/\s+/).filter(Boolean)
+);
+function significantWords(text) {
+  const seen = /* @__PURE__ */ new Set();
+  const words = [];
+  for (const match of text.toLowerCase().matchAll(/[a-z0-9]+/g)) {
+    const word = match[0];
+    if (word.length < MIN_TOKEN_LEN || STOPWORDS.has(word) || seen.has(word)) continue;
+    seen.add(word);
+    words.push(word);
+    if (words.length >= CANDIDATE_WORD_CAP) break;
+  }
+  return words;
+}
 function createRepository(db, opts = {}) {
-  function addAlias(nodeId, alias) {
+  async function addAlias(nodeId, alias) {
     const normalized = normalize(alias);
     if (!normalized) return;
     const exists = db.prepare("SELECT id FROM node_aliases WHERE node_id = ? AND alias = ?").get(nodeId, normalized);
@@ -21213,14 +21274,14 @@ function createRepository(db, opts = {}) {
   function touchNode(nodeId) {
     db.prepare("UPDATE nodes SET updated_at = ? WHERE id = ?").run(nowIso(), nodeId);
   }
-  function upsertNode(input) {
+  async function upsertNode(input) {
     const canonical = normalize(input.canonical);
     const projectId = input.projectId ?? null;
     const byCanonical = db.prepare(
       `SELECT id FROM nodes WHERE canonical = ? AND scope = ? AND COALESCE(project_id,'') = COALESCE(?, '')`
     ).get(canonical, input.scope, projectId);
     if (byCanonical) {
-      for (const alias of input.aliases ?? []) addAlias(byCanonical.id, alias);
+      for (const alias of input.aliases ?? []) await addAlias(byCanonical.id, alias);
       touchNode(byCanonical.id);
       return { id: byCanonical.id, created: false };
     }
@@ -21231,7 +21292,7 @@ function createRepository(db, opts = {}) {
          LIMIT 1`
     ).get(canonical, input.scope, projectId);
     if (byAlias) {
-      for (const alias of input.aliases ?? []) addAlias(byAlias.id, alias);
+      for (const alias of input.aliases ?? []) await addAlias(byAlias.id, alias);
       touchNode(byAlias.id);
       return { id: byAlias.id, created: false };
     }
@@ -21241,10 +21302,10 @@ function createRepository(db, opts = {}) {
          VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).run(canonical, input.kind, input.scope, projectId, input.projectLabel ?? null, ts, ts);
     const id = Number(info.lastInsertRowid);
-    for (const alias of input.aliases ?? []) addAlias(id, alias);
+    for (const alias of input.aliases ?? []) await addAlias(id, alias);
     return { id, created: true };
   }
-  function findSimilarNodes(name8, scope, projectId = null, limit = 10) {
+  async function findSimilarNodes(name8, scope, projectId = null, limit = 10) {
     const normalized = normalize(name8);
     if (!normalized) return [];
     const likePattern = `%${normalized.replace(/[%_]/g, "\\$&")}%`;
@@ -21258,7 +21319,7 @@ function createRepository(db, opts = {}) {
          LIMIT ?`
     ).all(scope, projectId, likePattern, likePattern, limit);
   }
-  function addObservation(input) {
+  async function addObservation(input) {
     const ts = nowIso();
     const validFrom = input.validFrom ?? ts;
     const info = db.prepare(
@@ -21278,21 +21339,21 @@ function createRepository(db, opts = {}) {
     );
     return Number(info.lastInsertRowid);
   }
-  function supersedeObservation(oldId, newId) {
+  async function supersedeObservation(oldId, newId) {
     db.prepare("UPDATE observations SET invalidated_at = ?, superseded_by = ? WHERE id = ?").run(
       nowIso(),
       newId,
       oldId
     );
   }
-  function invalidateObservation(id, hard = false) {
+  async function invalidateObservation(id, hard = false) {
     if (hard) {
       db.prepare("DELETE FROM observations WHERE id = ?").run(id);
     } else {
       db.prepare("UPDATE observations SET invalidated_at = ? WHERE id = ?").run(nowIso(), id);
     }
   }
-  function upsertEdge(input) {
+  async function upsertEdge(input) {
     const projectId = input.projectId ?? null;
     const ts = nowIso();
     const validFrom = input.validFrom ?? ts;
@@ -21322,17 +21383,17 @@ function createRepository(db, opts = {}) {
       return { id: existing.id, created: false };
     }
   }
-  function invalidateEdge(id) {
+  async function invalidateEdge(id) {
     db.prepare("UPDATE edges SET invalidated_at = ? WHERE id = ?").run(nowIso(), id);
   }
-  function supersedeEdge(oldId, newId) {
+  async function supersedeEdge(oldId, newId) {
     db.prepare("UPDATE edges SET invalidated_at = ?, superseded_by = ? WHERE id = ?").run(
       nowIso(),
       newId,
       oldId
     );
   }
-  function searchObservations(input) {
+  async function searchObservations(input) {
     const sanitized = sanitizeFtsQuery(input.query);
     if (!sanitized) return [];
     const limit = input.limit ?? 20;
@@ -21358,7 +21419,7 @@ function createRepository(db, opts = {}) {
     const params = [sanitized, ...guard.params, ...allow.params, limit];
     return db.prepare(sql).all(...params);
   }
-  function expandFromNodes(nodeIds, depth, scopes, projectId = null) {
+  async function expandFromNodes(nodeIds, depth, scopes, projectId = null) {
     const visited = new Set(nodeIds);
     let frontier = new Set(nodeIds);
     const edgeGuard = scopeGuard("e", projectId);
@@ -21411,6 +21472,161 @@ function createRepository(db, opts = {}) {
       observations: obsStmt.all(n.id, ...obsGuard.params, ...obsAllow.params)
     }));
   }
+  async function fetchVisibleEdges(nodeIds, projectId) {
+    if (nodeIds.length === 0) return [];
+    const placeholders = nodeIds.map(() => "?").join(",");
+    const guard = scopeGuard("e", projectId);
+    const rows = db.prepare(
+      `SELECT sn.canonical as srcCanonical, e.predicate as predicate, dn.canonical as dstCanonical
+         FROM edges e
+         JOIN nodes sn ON sn.id = e.src_id
+         JOIN nodes dn ON dn.id = e.dst_id
+         WHERE e.invalidated_at IS NULL
+           AND e.src_id IN (${placeholders})
+           AND e.dst_id IN (${placeholders})
+           AND ${guard.sql}
+         ORDER BY e.created_at ASC`
+    ).all(...nodeIds, ...nodeIds, ...guard.params);
+    return rows;
+  }
+  async function findSupersedeTarget(id) {
+    return db.prepare(
+      `SELECT id, scope, project_id as projectId, invalidated_at as invalidatedAt
+         FROM observations WHERE id = ?`
+    ).get(id);
+  }
+  async function findNodeOwner(nodeId) {
+    return db.prepare("SELECT id, scope, project_id as projectId FROM nodes WHERE id = ?").get(nodeId);
+  }
+  async function findEdgeOwner(edgeId) {
+    return db.prepare("SELECT id, scope, project_id as projectId FROM edges WHERE id = ?").get(edgeId);
+  }
+  async function findNearDuplicate(text, scope, projectId) {
+    try {
+      const words = significantWords(text);
+      if (words.length < MIN_ANCHOR_WORDS) return null;
+      const scored = await Promise.all(words.map(async (word, index) => ({
+        word,
+        index,
+        df: (await searchObservations({ query: word, scopes: [scope], projectId, limit: ANCHOR_DF_SEARCH_LIMIT })).length
+      })));
+      const candidates = scored.filter((c) => c.df > 0);
+      if (candidates.length < MIN_ANCHOR_WORDS) return null;
+      candidates.sort((a, b) => a.df - b.df || b.word.length - a.word.length || a.index - b.index);
+      const pool = candidates.slice(0, MAX_ANCHOR_WORDS).map((c) => c.word);
+      for (let size = pool.length; size >= MIN_ANCHOR_WORDS; size--) {
+        const query = pool.slice(0, size).join(" ");
+        const rows = await searchObservations({ query, scopes: [scope], projectId, limit: 5 });
+        const best = rows[0];
+        if (best) {
+          return { observationId: best.observationId, rank: best.rank };
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+  async function listNodes(scopes, projectId, entityFilter, limit = 50) {
+    const guard = scopeGuard("n", projectId);
+    const allow = scopeAllowlist("n", scopes);
+    const params = [...guard.params, ...allow.params];
+    let sql = `SELECT n.id as id, n.canonical as canonical, n.kind as kind, n.scope as scope,
+                      n.project_id as projectId, n.project_label as projectLabel
+               FROM nodes n
+               WHERE ${guard.sql} AND ${allow.sql}`;
+    if (entityFilter) {
+      const likePattern = `%${normalize(entityFilter).replace(/[%_]/g, "\\$&")}%`;
+      sql += ` AND (n.canonical LIKE ? ESCAPE '\\' OR n.id IN (
+                  SELECT node_id FROM node_aliases WHERE alias LIKE ? ESCAPE '\\'
+               ))`;
+      params.push(likePattern, likePattern);
+    }
+    sql += " ORDER BY n.updated_at DESC LIMIT ?";
+    params.push(limit);
+    return db.prepare(sql).all(...params);
+  }
+  async function listObservationsForNode(nodeId, projectId) {
+    const guard = scopeGuard("o", projectId);
+    return db.prepare(
+      `SELECT id, text, category, confidence, source,
+                valid_from as validFrom, invalidated_at as invalidatedAt, superseded_by as supersededBy
+         FROM observations o
+         WHERE o.node_id = ?
+           AND ${guard.sql}
+         ORDER BY o.valid_from DESC`
+    ).all(nodeId, ...guard.params);
+  }
+  async function listWisdomRows(categories, projectId, limit) {
+    const categoryPlaceholders = categories.map(() => "?").join(",");
+    const guard = scopeGuard("o", projectId);
+    const whereClause = `WHERE o.invalidated_at IS NULL
+           AND o.category IN (${categoryPlaceholders})
+           AND ${guard.sql}`;
+    const total = db.prepare(`SELECT COUNT(*) as count FROM observations o ${whereClause}`).get(...categories, ...guard.params).count;
+    const rows = db.prepare(
+      `SELECT o.category as category, o.text as text, o.confidence as confidence,
+                o.valid_from as validFrom
+         FROM observations o
+         ${whereClause}
+         ORDER BY CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC,
+                  o.valid_from DESC
+         LIMIT ?`
+    ).all(...categories, ...guard.params, limit);
+    return { rows, total };
+  }
+  async function injectObservations(scope, projectId, limit) {
+    const orderBy = `CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC, o.valid_from DESC`;
+    if (scope === "global") {
+      return db.prepare(
+        `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
+                  o.category as category, o.confidence as confidence, o.valid_from as validFrom
+           FROM observations o JOIN nodes n ON n.id = o.node_id
+           WHERE o.invalidated_at IS NULL AND o.scope = 'global'
+           ORDER BY ${orderBy}
+           LIMIT ?`
+      ).all(limit);
+    }
+    return db.prepare(
+      `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
+                o.category as category, o.confidence as confidence, o.valid_from as validFrom
+         FROM observations o JOIN nodes n ON n.id = o.node_id
+         WHERE o.invalidated_at IS NULL AND o.scope = ? AND o.project_id = ?
+         ORDER BY ${orderBy}
+         LIMIT ?`
+    ).all(scope, projectId, limit);
+  }
+  async function highConfidenceObservations(scope, projectId, limit) {
+    if (scope === "global") {
+      return db.prepare(
+        `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
+                  o.category as category, o.confidence as confidence, o.valid_from as validFrom
+           FROM observations o JOIN nodes n ON n.id = o.node_id
+           WHERE o.invalidated_at IS NULL AND o.scope = 'global' AND o.confidence = 'high'
+           ORDER BY o.valid_from DESC
+           LIMIT ?`
+      ).all(limit);
+    }
+    return db.prepare(
+      `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
+                o.category as category, o.confidence as confidence, o.valid_from as validFrom
+         FROM observations o JOIN nodes n ON n.id = o.node_id
+         WHERE o.invalidated_at IS NULL AND o.scope = ? AND o.project_id = ? AND o.confidence = 'high'
+         ORDER BY o.valid_from DESC
+         LIMIT ?`
+    ).all(scope, projectId, limit);
+  }
+  async function entityRoster(projectId) {
+    const guard = scopeGuard("o", projectId);
+    return db.prepare(
+      `SELECT n.canonical as canonical, COUNT(*) as count
+         FROM observations o JOIN nodes n ON n.id = o.node_id
+         WHERE o.invalidated_at IS NULL
+           AND ${guard.sql}
+         GROUP BY o.node_id
+         ORDER BY MAX(o.valid_from) DESC`
+    ).all(...guard.params);
+  }
   function countsByScope(table, projectId) {
     const guard = scopeGuard(table, projectId);
     const rows = db.prepare(`SELECT scope, COUNT(*) as c FROM ${table} WHERE ${guard.sql} GROUP BY scope`).all(...guard.params);
@@ -21433,7 +21649,7 @@ function createRepository(db, opts = {}) {
     const row = db.prepare(`SELECT COUNT(*) as c FROM observations WHERE created_at < ? AND ${guard.sql}`).get(cutoff, ...guard.params);
     return row.c;
   }
-  function stats(projectId = null) {
+  async function stats(projectId = null) {
     const nodeCounts = countsByScope("nodes", projectId);
     const obsCounts = countsByScope("observations", projectId);
     const edgeCounts = countsByScope("edges", projectId);
@@ -21468,19 +21684,30 @@ function createRepository(db, opts = {}) {
     supersedeEdge,
     searchObservations,
     expandFromNodes,
-    stats
+    stats,
+    fetchVisibleEdges,
+    findSupersedeTarget,
+    findNodeOwner,
+    findEdgeOwner,
+    findNearDuplicate,
+    listNodes,
+    listObservationsForNode,
+    listWisdomRows,
+    injectObservations,
+    highConfidenceObservations,
+    entityRoster
   };
 }
 
 // src/backup.ts
 import { copyFileSync as copyFileSync2, existsSync as existsSync2, mkdirSync as mkdirSync2, readdirSync as readdirSync2, unlinkSync } from "node:fs";
-import { dirname as dirname2, join as join3 } from "node:path";
+import { dirname as dirname2, join as join4 } from "node:path";
 
 // src/migrate.ts
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, readdirSync, readFileSync as readFileSync2, statSync as statSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { basename, join as join2 } from "node:path";
+import { basename, join as join3 } from "node:path";
 
 // src/distill.ts
 var MAX_FACT_TEXT_LENGTH = 500;
@@ -21763,8 +21990,8 @@ var inputShape = {
   project_id: external_exports.string().optional(),
   project_label: external_exports.string().optional(),
   source: external_exports.string().optional(),
-  // Bypasses the near-duplicate guard (see findNearDuplicate below) for every
-  // fact in this call — use when a high-similarity match is a false positive.
+  // Bypasses the near-duplicate guard (see Repository.findNearDuplicate) for
+  // every fact in this call — use when a high-similarity match is a false positive.
   allow_near_duplicate: external_exports.boolean().optional()
 };
 var inputSchema = external_exports.object(inputShape);
@@ -21777,72 +22004,8 @@ function rejectedResult(error2) {
     error: error2
   };
 }
-var MIN_TOKEN_LEN = 4;
-var CANDIDATE_WORD_CAP = 20;
-var MIN_ANCHOR_WORDS = 3;
-var MAX_ANCHOR_WORDS = 6;
-var ANCHOR_DF_SEARCH_LIMIT = 50;
-var NEAR_DUP_RANK_THRESHOLD = -3.5;
-var STOPWORDS = new Set(
-  `a an the and or but if then else for nor so yet
-   of to in on at by with from into onto up down out over under again further
-   is are was were be been being have has had do does did doing will would
-   shall should may might must can could this that these those it its
-   as not no never always about above below between through during before
-   after once here there when where why how all any both each few more most
-   other some such only own same than too very just also across still
-   i you he she we they them his her our your their what which who whom
-   because while against without within per via etc used use uses using`.split(/\s+/).filter(Boolean)
-);
-function significantWords(text) {
-  const seen = /* @__PURE__ */ new Set();
-  const words = [];
-  for (const match of text.toLowerCase().matchAll(/[a-z0-9]+/g)) {
-    const word = match[0];
-    if (word.length < MIN_TOKEN_LEN || STOPWORDS.has(word) || seen.has(word)) continue;
-    seen.add(word);
-    words.push(word);
-    if (words.length >= CANDIDATE_WORD_CAP) break;
-  }
-  return words;
-}
-function findNearDuplicate(repo, text, scope, projectId) {
-  try {
-    const words = significantWords(text);
-    if (words.length < MIN_ANCHOR_WORDS) return null;
-    const scored = words.map((word, index) => ({
-      word,
-      index,
-      // Document-frequency proxy: how many existing valid/visible
-      // observations already contain this word. A word with df=0 can never
-      // contribute to a match and is dropped before ranking.
-      df: repo.searchObservations({ query: word, scopes: [scope], projectId, limit: ANCHOR_DF_SEARCH_LIMIT }).length
-    }));
-    const candidates = scored.filter((c) => c.df > 0);
-    if (candidates.length < MIN_ANCHOR_WORDS) return null;
-    candidates.sort((a, b) => a.df - b.df || b.word.length - a.word.length || a.index - b.index);
-    const pool = candidates.slice(0, MAX_ANCHOR_WORDS).map((c) => c.word);
-    for (let size = pool.length; size >= MIN_ANCHOR_WORDS; size--) {
-      const query = pool.slice(0, size).join(" ");
-      const rows = repo.searchObservations({ query, scopes: [scope], projectId, limit: 5 });
-      const best = rows[0];
-      if (best) {
-        return { observationId: best.observationId, rank: best.rank };
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-function fetchSupersedeTarget(db, id) {
-  return db.prepare(
-    `SELECT id, scope, project_id as projectId, invalidated_at as invalidatedAt
-       FROM observations WHERE id = ?`
-  ).get(id);
-}
-function validateSupersedeTarget(db, supersedesId, effectiveProjectId) {
-  const target = fetchSupersedeTarget(db, supersedesId);
+async function validateSupersedeTarget(repo, supersedesId, effectiveProjectId) {
+  const target = await repo.findSupersedeTarget(supersedesId);
   if (!target) {
     return `supersedes_observation_id ${supersedesId} does not exist`;
   }
@@ -21855,7 +22018,7 @@ function validateSupersedeTarget(db, supersedesId, effectiveProjectId) {
   }
   return null;
 }
-function handleSave(repo, db, input, ctx) {
+async function handleSave(repo, input, ctx) {
   const scope = input.scope ?? "project";
   let projectId;
   if (scope === "global") {
@@ -21885,14 +22048,14 @@ function handleSave(repo, db, input, ctx) {
     }
     let supersedesId;
     if (fact.supersedes_observation_id != null) {
-      const supersedeError = validateSupersedeTarget(db, fact.supersedes_observation_id, ctx.ownProjectId);
+      const supersedeError = await validateSupersedeTarget(repo, fact.supersedes_observation_id, ctx.ownProjectId);
       if (supersedeError) {
         factOutcomes.push({ entity: fact.entity.name, status: "rejected", reason: supersedeError });
         continue;
       }
       supersedesId = fact.supersedes_observation_id;
     }
-    const nodeResult = repo.upsertNode({
+    const nodeResult = await repo.upsertNode({
       canonical: fact.entity.name,
       kind: fact.entity.kind || "other",
       scope,
@@ -21900,7 +22063,7 @@ function handleSave(repo, db, input, ctx) {
       projectLabel: input.project_label ?? null,
       aliases: fact.aliases
     });
-    const existingNode = repo.expandFromNodes([nodeResult.id], 0, [scope], projectId)[0];
+    const existingNode = (await repo.expandFromNodes([nodeResult.id], 0, [scope], projectId))[0];
     const normalizedNewText = normalizeForDedupe(fact.text);
     const duplicate = existingNode?.observations.find(
       (obs) => normalizeForDedupe(obs.text) === normalizedNewText
@@ -21915,7 +22078,7 @@ function handleSave(repo, db, input, ctx) {
       continue;
     }
     if (supersedesId == null && input.allow_near_duplicate !== true) {
-      const nearDup = findNearDuplicate(repo, fact.text, scope, projectId);
+      const nearDup = await repo.findNearDuplicate(fact.text, scope, projectId);
       if (nearDup && nearDup.rank <= NEAR_DUP_RANK_THRESHOLD) {
         factOutcomes.push({
           entity: fact.entity.name,
@@ -21926,7 +22089,7 @@ function handleSave(repo, db, input, ctx) {
         continue;
       }
     }
-    const observationId = repo.addObservation({
+    const observationId = await repo.addObservation({
       nodeId: nodeResult.id,
       text: fact.text.trim(),
       scope,
@@ -21936,7 +22099,7 @@ function handleSave(repo, db, input, ctx) {
       source: input.source ?? null
     });
     if (supersedesId != null) {
-      repo.supersedeObservation(supersedesId, observationId);
+      await repo.supersedeObservation(supersedesId, observationId);
     }
     factOutcomes.push({
       entity: fact.entity.name,
@@ -21948,21 +22111,21 @@ function handleSave(repo, db, input, ctx) {
   }
   const relationOutcomes = [];
   for (const relation of input.relations ?? []) {
-    const srcNode = repo.upsertNode({
+    const srcNode = await repo.upsertNode({
       canonical: relation.src,
       kind: "other",
       scope,
       projectId,
       projectLabel: input.project_label ?? null
     });
-    const dstNode = repo.upsertNode({
+    const dstNode = await repo.upsertNode({
       canonical: relation.dst,
       kind: "other",
       scope,
       projectId,
       projectLabel: input.project_label ?? null
     });
-    const edge = repo.upsertEdge({
+    const edge = await repo.upsertEdge({
       srcId: srcNode.id,
       predicate: relation.predicate,
       dstId: dstNode.id,
@@ -22006,7 +22169,7 @@ function computeProjectId(projectRoot) {
 `).digest("hex").slice(0, 16);
 }
 function defaultWisdomPath(projectRoot) {
-  return join2(projectRoot, ".claude", "orchestra-wisdom.json");
+  return join3(projectRoot, ".claude", "orchestra-wisdom.json");
 }
 function findLegacyMdFiles(memoryDir) {
   const files = [];
@@ -22014,7 +22177,7 @@ function findLegacyMdFiles(memoryDir) {
     if (!existsSync(dir)) return;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "MEMORY.md") {
-        files.push(join2(dir, entry.name));
+        files.push(join3(dir, entry.name));
       }
     }
   }
@@ -22022,11 +22185,11 @@ function findLegacyMdFiles(memoryDir) {
     collectFrom(memoryDir);
     return files.sort();
   }
-  const base = join2(homedir2(), ".claude", "projects");
+  const base = join3(homedir2(), ".claude", "projects");
   if (!existsSync(base)) return files;
   for (const projectDir of readdirSync(base, { withFileTypes: true })) {
     if (!projectDir.isDirectory()) continue;
-    collectFrom(join2(base, projectDir.name, "memory"));
+    collectFrom(join3(base, projectDir.name, "memory"));
   }
   return files.sort();
 }
@@ -22139,15 +22302,14 @@ function buildDryRunReport(args) {
   );
   return lines.join("\n");
 }
-function importWisdomEntry(db, repo, entry, category, projectId, projectLabel) {
+async function importWisdomEntry(db, repo, entry, category, projectId, projectLabel) {
   const isLegacy = typeof entry === "string";
   const text = isLegacy ? entry : entry.text;
   const confidence = isLegacy ? "medium" : entry.confidence ?? "medium";
   const ts = isLegacy ? void 0 : entry.ts;
   const ctx = { ownProjectId: projectId };
-  const result = handleSave(
+  const result = await handleSave(
     repo,
-    db,
     {
       facts: [
         {
@@ -22175,7 +22337,7 @@ function importWisdomEntry(db, repo, entry, category, projectId, projectLabel) {
   if (outcome?.status === "duplicate") return "duplicate";
   return "rejected";
 }
-function importWisdomFile(db, repo, wisdomPath, projectId, projectLabel) {
+async function importWisdomFile(db, repo, wisdomPath, projectId, projectLabel) {
   const parsed = JSON.parse(readFileSync2(wisdomPath, "utf8"));
   const summary = { saved: 0, duplicate: 0, rejected: 0 };
   db.exec("BEGIN IMMEDIATE");
@@ -22184,7 +22346,7 @@ function importWisdomFile(db, repo, wisdomPath, projectId, projectLabel) {
       const entries = parsed[key];
       if (!Array.isArray(entries)) continue;
       for (const entry of entries) {
-        const status = importWisdomEntry(db, repo, entry, category, projectId, projectLabel);
+        const status = await importWisdomEntry(db, repo, entry, category, projectId, projectLabel);
         summary[status] += 1;
       }
     }
@@ -22203,7 +22365,7 @@ function checkpointWal(dbPath) {
     db.close();
   }
 }
-function commitMigration(args) {
+async function commitMigration(args) {
   const wisdomPath = args.wisdomPath ?? defaultWisdomPath(args.projectRoot);
   const wisdomExists = existsSync(wisdomPath);
   const dbPath = defaultDbPath();
@@ -22224,7 +22386,7 @@ function commitMigration(args) {
   if (wisdomExists) {
     const projectId = computeProjectId(args.projectRoot);
     const projectLabel = basename(args.projectRoot);
-    const summary = importWisdomFile(db, repo, wisdomPath, projectId, projectLabel);
+    const summary = await importWisdomFile(db, repo, wisdomPath, projectId, projectLabel);
     lines.push(
       `Wisdom import from ${wisdomPath}: saved=${summary.saved}, duplicate=${summary.duplicate}, rejected=${summary.rejected} (scope=project, project_id=${projectId}).`
     );
@@ -22237,7 +22399,7 @@ function commitMigration(args) {
   );
   return lines.join("\n");
 }
-function runMigrate(argv) {
+async function runMigrate(argv) {
   const args = parseArgs(argv);
   if (!args.commit) {
     try {
@@ -22250,8 +22412,15 @@ function runMigrate(argv) {
     }
     return;
   }
+  if (getRemoteUrl()) {
+    process.stderr.write(
+      "orchestra-memory --migrate --commit: not supported in remote mode yet; run this command against the server host directly (where ORCHESTRA_MEMORY_URL is unset) instead.\n"
+    );
+    process.exit(1);
+    return;
+  }
   try {
-    process.stdout.write(commitMigration(args) + "\n");
+    process.stdout.write(await commitMigration(args) + "\n");
     process.exit(0);
   } catch (err) {
     process.stderr.write(`orchestra-memory --migrate --commit failed (no changes assumed committed): ${errorMessage2(err)}
@@ -22275,7 +22444,7 @@ function parseArgs2(argv) {
   return { keep };
 }
 function backupsDir(dbPath = defaultDbPath()) {
-  return join3(dirname2(dbPath), "backups");
+  return join4(dirname2(dbPath), "backups");
 }
 function todayStamp(now = /* @__PURE__ */ new Date()) {
   const year = now.getFullYear();
@@ -22288,7 +22457,7 @@ function rotateBackups(dir, keep) {
   entries.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
   for (const stale of entries.slice(keep)) {
     try {
-      unlinkSync(join3(dir, stale));
+      unlinkSync(join4(dir, stale));
     } catch {
     }
   }
@@ -22304,7 +22473,7 @@ function runBackup(argv) {
       return;
     }
     const dir = backupsDir(dbPath);
-    const target = join3(dir, `graph-${todayStamp()}.db`);
+    const target = join4(dir, `graph-${todayStamp()}.db`);
     if (existsSync2(target)) {
       process.exit(0);
       return;
@@ -22323,6 +22492,158 @@ function runBackup(argv) {
     }
     process.exit(0);
   }
+}
+
+// src/remote/client.ts
+var RemoteUnavailableError = class extends Error {
+  constructor(message, cause) {
+    super(message);
+    this.cause = cause;
+    this.name = "RemoteUnavailableError";
+  }
+  cause;
+};
+function isAbortError(err) {
+  return err?.name === "AbortError";
+}
+function extractErrorMessage(body, fallback) {
+  const message = body?.error?.message;
+  return typeof message === "string" && message.length > 0 ? message : fallback;
+}
+function trimTrailingUndefined(params) {
+  let end = params.length;
+  while (end > 0 && params[end - 1] === void 0) end--;
+  return params.slice(0, end);
+}
+function createRemoteRepository(opts) {
+  const ownProjectId = (() => {
+    try {
+      return computeProjectId(process.cwd());
+    } catch {
+      return null;
+    }
+  })();
+  const endpoint = `${opts.url.replace(/\/+$/, "")}/rpc`;
+  function buildHeaders() {
+    return {
+      "content-type": "application/json",
+      ...opts.token ? { authorization: `Bearer ${opts.token}` } : {},
+      ...ownProjectId ? { "x-orchestra-project-id": ownProjectId } : {}
+    };
+  }
+  async function call(method, ...params) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+    let res;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: buildHeaders(),
+        // Trim trailing `undefined` entries before serializing: an omitted
+        // optional trailing positional argument (e.g. repository.ts's
+        // `listNodes(scopes, projectId, entityFilter, limit = 50)` called
+        // without `limit`) arrives here as a literal `undefined` element in
+        // the `params` array. `JSON.stringify` keeps a trailing `undefined`
+        // ARRAY element and serializes it as `null` (unlike an object
+        // property set to `undefined`, which it drops entirely) — so an
+        // omitted argument would otherwise reach the server as an explicit
+        // `null`, bypassing the callee's own JS default parameter and (for
+        // numeric LIMIT-bound params) causing a node:sqlite "datatype
+        // mismatch". Trimming restores "argument omitted" semantics on the
+        // wire, matching a direct (non-RPC) call. This must NOT trim a
+        // genuine `null` (e.g. `projectId: null` for global scope) — only
+        // `undefined` — since `null` is itself a meaningful value for several
+        // Repository methods. See test/remote-integration.test.ts (task-5.2)
+        // for the characterization test that caught this.
+        body: JSON.stringify({ method, params: trimTrailingUndefined(params) }),
+        signal: controller.signal
+      });
+    } catch (err) {
+      throw new RemoteUnavailableError(
+        isAbortError(err) ? `orchestra-memory remote: ${method} timed out after ${opts.timeoutMs}ms` : `orchestra-memory remote: ${method} request failed`,
+        err
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw new RemoteUnavailableError(`orchestra-memory remote: ${method} unauthorized (HTTP ${res.status})`);
+    }
+    let body;
+    try {
+      body = await res.json();
+    } catch (err) {
+      throw new RemoteUnavailableError(`orchestra-memory remote: ${method} returned invalid JSON`, err);
+    }
+    if (!res.ok) {
+      throw new RemoteUnavailableError(
+        `orchestra-memory remote: ${method} failed: ${extractErrorMessage(body, `HTTP ${res.status}`)}`
+      );
+    }
+    if (!body || typeof body !== "object") {
+      throw new RemoteUnavailableError(`orchestra-memory remote: ${method} returned a malformed response`);
+    }
+    if ("error" in body) {
+      throw new RemoteUnavailableError(
+        `orchestra-memory remote: ${method} failed: ${extractErrorMessage(body, "unknown error")}`
+      );
+    }
+    return body.result;
+  }
+  return {
+    upsertNode: (input) => call("upsertNode", input),
+    addAlias: (nodeId, alias) => call("addAlias", nodeId, alias),
+    findSimilarNodes: (name8, scope, projectId, limit) => call("findSimilarNodes", name8, scope, projectId, limit),
+    addObservation: (input) => call("addObservation", input),
+    supersedeObservation: (oldId, newId) => call("supersedeObservation", oldId, newId),
+    invalidateObservation: (id, hard) => call("invalidateObservation", id, hard),
+    upsertEdge: (input) => call("upsertEdge", input),
+    invalidateEdge: (id) => call("invalidateEdge", id),
+    supersedeEdge: (oldId, newId) => call("supersedeEdge", oldId, newId),
+    searchObservations: (input) => call("searchObservations", input),
+    expandFromNodes: (nodeIds, depth, scopes, projectId) => call("expandFromNodes", nodeIds, depth, scopes, projectId),
+    stats: (projectId) => call("stats", projectId),
+    fetchVisibleEdges: (nodeIds, projectId) => call("fetchVisibleEdges", nodeIds, projectId),
+    findSupersedeTarget: (id) => call("findSupersedeTarget", id),
+    findNearDuplicate: (text, scope, projectId) => call("findNearDuplicate", text, scope, projectId),
+    listNodes: (scopes, projectId, entityFilter, limit) => call("listNodes", scopes, projectId, entityFilter, limit),
+    listObservationsForNode: (nodeId, projectId) => call("listObservationsForNode", nodeId, projectId),
+    listWisdomRows: (categories, projectId, limit) => call("listWisdomRows", categories, projectId, limit),
+    injectObservations: (scope, projectId, limit) => call("injectObservations", scope, projectId, limit),
+    highConfidenceObservations: (scope, projectId, limit) => call("highConfidenceObservations", scope, projectId, limit),
+    entityRoster: (projectId) => call("entityRoster", projectId)
+  };
+}
+async function probeHealth(url, timeoutMs) {
+  const endpoint = `${url.replace(/\/+$/, "")}/health`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(endpoint, { method: "GET", signal: controller.signal });
+  } catch (err) {
+    throw new RemoteUnavailableError(
+      isAbortError(err) ? `orchestra-memory remote: health check timed out after ${timeoutMs}ms` : `orchestra-memory remote: health check request failed`,
+      err
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  let body;
+  try {
+    body = await res.json();
+  } catch (err) {
+    throw new RemoteUnavailableError("orchestra-memory remote: health check returned invalid JSON", err);
+  }
+  if (!res.ok) {
+    throw new RemoteUnavailableError(
+      `orchestra-memory remote: health check failed: ${extractErrorMessage(body, `HTTP ${res.status}`)}`
+    );
+  }
+  if (!body || typeof body !== "object" || typeof body.ok !== "boolean" || typeof body.schemaVersion !== "string" || typeof body.serverVersion !== "string") {
+    throw new RemoteUnavailableError("orchestra-memory remote: health check returned a malformed response");
+  }
+  return body;
 }
 
 // src/inject.ts
@@ -22346,64 +22667,13 @@ function parseArgs3(argv) {
   const budget = explicitBudget ?? (mode === "index" ? INDEX_DEFAULT_BUDGET_BYTES : DEFAULT_BUDGET_BYTES);
   return { projectId, budget, mode };
 }
-function queryObservations(db, scope, projectId, limit) {
-  const orderBy = `CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC, o.valid_from DESC`;
-  if (scope === "global") {
-    return db.prepare(
-      `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
-                o.category as category, o.confidence as confidence, o.valid_from as validFrom
-         FROM observations o JOIN nodes n ON n.id = o.node_id
-         WHERE o.invalidated_at IS NULL AND o.scope = 'global'
-         ORDER BY ${orderBy}
-         LIMIT ?`
-    ).all(limit);
-  }
-  return db.prepare(
-    `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
-              o.category as category, o.confidence as confidence, o.valid_from as validFrom
-       FROM observations o JOIN nodes n ON n.id = o.node_id
-       WHERE o.invalidated_at IS NULL AND o.scope = ? AND o.project_id = ?
-       ORDER BY ${orderBy}
-       LIMIT ?`
-  ).all(scope, projectId, limit);
-}
-function queryHighConfidenceObservations(db, scope, projectId, limit) {
-  if (scope === "global") {
-    return db.prepare(
-      `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
-                o.category as category, o.confidence as confidence, o.valid_from as validFrom
-         FROM observations o JOIN nodes n ON n.id = o.node_id
-         WHERE o.invalidated_at IS NULL AND o.scope = 'global' AND o.confidence = 'high'
-         ORDER BY o.valid_from DESC
-         LIMIT ?`
-    ).all(limit);
-  }
-  return db.prepare(
-    `SELECT o.id as id, n.canonical as canonical, o.text as text, o.scope as scope,
-              o.category as category, o.confidence as confidence, o.valid_from as validFrom
-       FROM observations o JOIN nodes n ON n.id = o.node_id
-       WHERE o.invalidated_at IS NULL AND o.scope = ? AND o.project_id = ? AND o.confidence = 'high'
-       ORDER BY o.valid_from DESC
-       LIMIT ?`
-  ).all(scope, projectId, limit);
-}
-function queryEntityRoster(db, projectId) {
-  return db.prepare(
-    `SELECT n.canonical as canonical, COUNT(*) as count
-       FROM observations o JOIN nodes n ON n.id = o.node_id
-       WHERE o.invalidated_at IS NULL
-         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))
-       GROUP BY o.node_id
-       ORDER BY MAX(o.valid_from) DESC`
-  ).all(projectId);
-}
 var byteLen = (s) => Buffer.byteLength(s, "utf8");
 var ENTITY_LINE_WIDTH = 100;
 var PINNED_CAP = 8;
-function buildInjectOutput(db, projectId, budget) {
-  const projectFacts = queryObservations(db, "project", projectId, 300);
-  const globalFacts = queryObservations(db, "global", projectId, 50);
-  const privateFacts = queryObservations(db, "private", projectId, 300);
+async function buildInjectOutput(repo, projectId, budget) {
+  const projectFacts = await repo.injectObservations("project", projectId, 300);
+  const globalFacts = await repo.injectObservations("global", projectId, 50);
+  const privateFacts = await repo.injectObservations("private", projectId, 300);
   const totalFacts = projectFacts.length + globalFacts.length + privateFacts.length;
   if (totalFacts === 0) return "";
   const header = `# Graph memory (project ${projectId}) \u2014 memory_search to expand.`;
@@ -22448,13 +22718,13 @@ function buildInjectOutput(db, projectId, budget) {
   }
   return kept.join("\n");
 }
-function buildInjectIndex(db, projectId, budget) {
+async function buildInjectIndex(repo, projectId, budget) {
   const pinned = [
-    ...queryHighConfidenceObservations(db, "project", projectId, PINNED_CAP),
-    ...queryHighConfidenceObservations(db, "global", projectId, PINNED_CAP),
-    ...queryHighConfidenceObservations(db, "private", projectId, PINNED_CAP)
+    ...await repo.highConfidenceObservations("project", projectId, PINNED_CAP),
+    ...await repo.highConfidenceObservations("global", projectId, PINNED_CAP),
+    ...await repo.highConfidenceObservations("private", projectId, PINNED_CAP)
   ].sort((a, b) => b.validFrom.localeCompare(a.validFrom)).slice(0, PINNED_CAP);
-  const entities = queryEntityRoster(db, projectId);
+  const entities = await repo.entityRoster(projectId);
   if (entities.length === 0) return "";
   const header = `# Graph memory index (project ${projectId}) \u2014 memory_search <entity> to expand.`;
   const kept = [header, ""];
@@ -22504,20 +22774,48 @@ function buildInjectIndex(db, projectId, budget) {
   }
   return kept.join("\n");
 }
-function runInject(argv) {
+async function tryRemoteInject(remoteUrl, projectId, budget, mode) {
+  try {
+    const remoteRepo = createRemoteRepository({
+      url: remoteUrl,
+      token: getClientToken(),
+      timeoutMs: getTimeoutMs(500)
+    });
+    return mode === "index" ? await buildInjectIndex(remoteRepo, projectId, budget) : await buildInjectOutput(remoteRepo, projectId, budget);
+  } catch (err) {
+    try {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(
+        `orchestra-memory --inject: remote backend unavailable, falling back to local DB (${message})
+`
+      );
+    } catch {
+    }
+    return null;
+  }
+}
+async function runInject(argv) {
   try {
     const { projectId, budget, mode } = parseArgs3(argv);
     if (!projectId) {
       process.stderr.write("orchestra-memory --inject: missing --project-id, nothing to inject\n");
     } else {
-      const { db, diagnostic } = tryOpenDb();
-      if (!db) {
-        if (diagnostic) process.stderr.write(`${diagnostic}
-`);
-      } else {
-        const output = mode === "index" ? buildInjectIndex(db, projectId, budget) : buildInjectOutput(db, projectId, budget);
-        if (output) process.stdout.write(output);
+      let output = null;
+      const remoteUrl = getRemoteUrl();
+      if (remoteUrl) {
+        output = await tryRemoteInject(remoteUrl, projectId, budget, mode);
       }
+      if (output === null) {
+        const { db, diagnostic } = tryOpenDb();
+        if (!db) {
+          if (diagnostic) process.stderr.write(`${diagnostic}
+`);
+        } else {
+          const repo = createRepository(db);
+          output = mode === "index" ? await buildInjectIndex(repo, projectId, budget) : await buildInjectOutput(repo, projectId, budget);
+        }
+      }
+      if (output) process.stdout.write(output);
     }
     process.exit(0);
   } catch (err) {
@@ -22529,6 +22827,353 @@ function runInject(argv) {
     }
     process.exit(0);
   }
+}
+
+// src/serve.ts
+import { createHash as createHash2, timingSafeEqual } from "node:crypto";
+import { createServer } from "node:http";
+
+// src/remote/protocol.ts
+var METHOD_NAMES = [
+  "upsertNode",
+  "addAlias",
+  "findSimilarNodes",
+  "addObservation",
+  "supersedeObservation",
+  "invalidateObservation",
+  "upsertEdge",
+  "invalidateEdge",
+  "supersedeEdge",
+  "searchObservations",
+  "expandFromNodes",
+  "stats",
+  "fetchVisibleEdges",
+  "findSupersedeTarget",
+  "findNearDuplicate",
+  "listNodes",
+  "listObservationsForNode",
+  "listWisdomRows",
+  "injectObservations",
+  "highConfidenceObservations",
+  "entityRoster"
+];
+function isValidMethodName(name8) {
+  return typeof name8 === "string" && METHOD_NAMES.includes(name8);
+}
+var PROJECT_ID_PARAM_INDEX = {
+  findSimilarNodes: 2,
+  // (name, scope, projectId?, limit?)
+  expandFromNodes: 3,
+  // (nodeIds, depth, scopes?, projectId?)
+  stats: 0,
+  // (projectId?)
+  fetchVisibleEdges: 1,
+  // (nodeIds, projectId)
+  findNearDuplicate: 2,
+  // (text, scope, projectId)
+  listNodes: 1,
+  // (scopes, projectId, entityFilter, limit?)
+  listObservationsForNode: 1,
+  // (nodeId, projectId)
+  listWisdomRows: 1,
+  // (categories, projectId, limit)
+  injectObservations: 1,
+  // (scope, projectId, limit)
+  highConfidenceObservations: 1,
+  // (scope, projectId, limit)
+  entityRoster: 0
+  // (projectId)
+};
+var PROJECT_ID_OBJECT_FIELD = {
+  upsertNode: "projectId",
+  // UpsertNodeInput.projectId
+  addObservation: "projectId",
+  // AddObservationInput.projectId
+  upsertEdge: "projectId",
+  // UpsertEdgeInput.projectId
+  searchObservations: "projectId"
+  // SearchObservationsInput.projectId
+};
+
+// src/serve.ts
+var SERVER_VERSION = "0.3.0";
+var MAX_BODY_BYTES = 1 * 1024 * 1024;
+var PROJECT_ID_RE = /^[0-9a-f]{16}$/;
+function errorMessage3(err) {
+  return err instanceof Error ? err.message : String(err);
+}
+var LOOPBACK_HOSTS = /* @__PURE__ */ new Set(["127.0.0.1", "localhost", "::1"]);
+function safeTokenEquals(a, b) {
+  const ha = createHash2("sha256").update(a, "utf8").digest();
+  const hb = createHash2("sha256").update(b, "utf8").digest();
+  return timingSafeEqual(ha, hb);
+}
+function sendJson(res, status, body) {
+  const payload = JSON.stringify(body);
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(payload);
+}
+var BodyTooLargeError = class extends Error {
+};
+var InvalidJsonError = class extends Error {
+};
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+    const settle = (fn) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
+    req.on("data", (chunk) => {
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_BODY_BYTES) {
+        settle(() => reject(new BodyTooLargeError("request body exceeds MAX_BODY_BYTES")));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      if (settled) return;
+      const raw = Buffer.concat(chunks).toString("utf8");
+      try {
+        const parsed = JSON.parse(raw);
+        settle(() => resolve(parsed));
+      } catch {
+        settle(() => reject(new InvalidJsonError("invalid JSON body")));
+      }
+    });
+    req.on("error", (err) => {
+      settle(() => reject(err));
+    });
+  });
+}
+function extractProjectId(method, params) {
+  const paramIndex = PROJECT_ID_PARAM_INDEX[method];
+  if (paramIndex !== void 0) {
+    const value = params[paramIndex];
+    return { present: value !== null && value !== void 0, value };
+  }
+  const fieldName = PROJECT_ID_OBJECT_FIELD[method];
+  if (fieldName !== void 0) {
+    const obj = params[0];
+    const value = obj?.[fieldName];
+    return { present: value !== null && value !== void 0, value };
+  }
+  return { present: false, value: void 0 };
+}
+async function handleRpc(repo, req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) {
+      sendJson(res, 413, { error: { message: "request body too large" } });
+      return;
+    }
+    if (err instanceof InvalidJsonError) {
+      sendJson(res, 400, { error: { message: "invalid JSON body" } });
+      return;
+    }
+    throw err;
+  }
+  if (typeof body !== "object" || body === null || typeof body.method !== "string" || !Array.isArray(body.params)) {
+    sendJson(res, 400, {
+      error: { message: "malformed request: expected { method: string, params: array }" }
+    });
+    return;
+  }
+  const method = body.method;
+  const params = body.params;
+  const origin = req.headers.origin;
+  if (origin) {
+    const allowedOrigins = getAllowedOrigins();
+    if (!allowedOrigins.includes(origin)) {
+      sendJson(res, 403, { error: { message: "origin not allowed" } });
+      return;
+    }
+  }
+  const serverToken = getServerToken();
+  if (serverToken !== void 0) {
+    const authHeader = req.headers.authorization;
+    const BEARER_PREFIX = "Bearer ";
+    if (!authHeader || !authHeader.startsWith(BEARER_PREFIX)) {
+      console.error("orchestra-memory --serve-http: request rejected: unauthorized");
+      sendJson(res, 401, { error: { message: "unauthorized" } });
+      return;
+    }
+    const receivedToken = authHeader.slice(BEARER_PREFIX.length);
+    if (!safeTokenEquals(receivedToken, serverToken)) {
+      console.error("orchestra-memory --serve-http: request rejected: unauthorized");
+      sendJson(res, 401, { error: { message: "unauthorized" } });
+      return;
+    }
+  }
+  const rawHeaderProjectId = req.headers["x-orchestra-project-id"];
+  const headerProjectId = Array.isArray(rawHeaderProjectId) ? rawHeaderProjectId[0] : rawHeaderProjectId;
+  if (!headerProjectId || !PROJECT_ID_RE.test(headerProjectId)) {
+    sendJson(res, 400, { error: { message: "missing or malformed x-orchestra-project-id header" } });
+    return;
+  }
+  if (!isValidMethodName(method)) {
+    sendJson(res, 400, { error: { message: `unknown method: ${method}`, code: "UNKNOWN_METHOD" } });
+    return;
+  }
+  const projectId = extractProjectId(method, params);
+  if (projectId.present && !PROJECT_ID_RE.test(projectId.value)) {
+    sendJson(res, 400, { error: { message: "invalid project_id format" } });
+    return;
+  }
+  if (projectId.present && projectId.value !== headerProjectId) {
+    sendJson(res, 403, {
+      error: { message: "project_id mismatch: params project_id does not match x-orchestra-project-id header" }
+    });
+    return;
+  }
+  function isOwned(row) {
+    return row !== void 0 && (row.scope === "global" || row.projectId === headerProjectId);
+  }
+  function expectIntegerParams(count) {
+    if (params.length < count) return null;
+    const ids = [];
+    for (let i = 0; i < count; i++) {
+      const value = params[i];
+      if (typeof value !== "number" || !Number.isInteger(value)) return null;
+      ids.push(value);
+    }
+    return ids;
+  }
+  const ID_PARAM_COUNT = {
+    findSupersedeTarget: 1,
+    invalidateObservation: 1,
+    supersedeObservation: 2,
+    invalidateEdge: 1,
+    supersedeEdge: 2,
+    addAlias: 1
+    // only nodeId is id-shaped; addAlias's alias (params[1]) is validated downstream
+  };
+  const idParamCount = ID_PARAM_COUNT[method];
+  if (idParamCount !== void 0 && expectIntegerParams(idParamCount) === null) {
+    sendJson(res, 400, { error: { message: `${method}: expected ${idParamCount} integer id param(s)` } });
+    return;
+  }
+  if (method === "findSupersedeTarget") {
+    const target = await repo.findSupersedeTarget(params[0]);
+    sendJson(res, 200, { result: isOwned(target) ? target : null });
+    return;
+  }
+  if (method === "invalidateObservation" || method === "supersedeObservation") {
+    const ids = method === "supersedeObservation" ? [params[0], params[1]] : [params[0]];
+    for (const id of ids) {
+      const row = await repo.findSupersedeTarget(id);
+      if (!isOwned(row)) {
+        sendJson(res, 403, { error: { message: `observation #${id} is not visible to this project` } });
+        return;
+      }
+    }
+  }
+  if (method === "invalidateEdge" || method === "supersedeEdge") {
+    const ids = method === "supersedeEdge" ? [params[0], params[1]] : [params[0]];
+    for (const id of ids) {
+      const row = await repo.findEdgeOwner(id);
+      if (!isOwned(row)) {
+        sendJson(res, 403, { error: { message: `edge #${id} is not visible to this project` } });
+        return;
+      }
+    }
+  }
+  if (method === "addAlias") {
+    const nodeId = params[0];
+    const row = await repo.findNodeOwner(nodeId);
+    if (!isOwned(row)) {
+      sendJson(res, 403, { error: { message: `node #${nodeId} is not visible to this project` } });
+      return;
+    }
+  }
+  try {
+    const fn = repo[method];
+    const result = await fn(...params);
+    sendJson(res, 200, { result });
+  } catch (err) {
+    console.error(`orchestra-memory --serve-http: repo call failed (method=${method}):`, errorMessage3(err));
+    sendJson(res, 500, { error: { message: errorMessage3(err) } });
+  }
+}
+async function handleRequest(repo, req, res) {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if (req.method === "GET" && url.pathname === "/health") {
+    const health = { ok: true, schemaVersion: SCHEMA_VERSION, serverVersion: SERVER_VERSION };
+    sendJson(res, 200, health);
+    return;
+  }
+  if (req.method === "POST" && url.pathname === "/rpc") {
+    await handleRpc(repo, req, res);
+    return;
+  }
+  sendJson(res, 404, { error: { message: "not found" } });
+}
+function createServeHttpServer() {
+  const dbPath = getDbPath();
+  let db;
+  try {
+    db = openDb(dbPath);
+  } catch (err) {
+    process.stderr.write(
+      `orchestra-memory --serve-http: failed to open database at "${dbPath}": ${errorMessage3(err)}
+`
+    );
+    process.exit(1);
+    return void 0;
+  }
+  const repo = createRepository(db, { dbPath });
+  const listenAddress = getListenAddress();
+  const sepIndex = listenAddress.lastIndexOf(":");
+  const host = sepIndex === -1 ? "" : listenAddress.slice(0, sepIndex);
+  const portStr = sepIndex === -1 ? "" : listenAddress.slice(sepIndex + 1);
+  const port = Number(portStr);
+  if (!host || portStr === "" || !Number.isInteger(port) || port < 0 || port > 65535) {
+    process.stderr.write(
+      `orchestra-memory --serve-http: malformed ORCHESTRA_MEMORY_LISTEN "${listenAddress}" (expected "host:port")
+`
+    );
+    process.exit(1);
+    return void 0;
+  }
+  if (getServerToken() === void 0 && !LOOPBACK_HOSTS.has(host)) {
+    process.stderr.write(
+      `orchestra-memory --serve-http: refusing to start: no ORCHESTRA_MEMORY_SERVER_TOKEN is configured and ORCHESTRA_MEMORY_LISTEN host "${host}" is not loopback. Binding a non-loopback address with no token would expose the entire memory database with no authentication. Set ORCHESTRA_MEMORY_SERVER_TOKEN, or bind to 127.0.0.1/localhost/::1 for local-only use.
+`
+    );
+    process.exit(1);
+    return void 0;
+  }
+  const server = createServer((req, res) => {
+    handleRequest(repo, req, res).catch((err) => {
+      console.error("orchestra-memory --serve-http: unhandled request error:", errorMessage3(err));
+      try {
+        sendJson(res, 500, { error: { message: "internal server error" } });
+      } catch {
+      }
+    });
+  });
+  server.on("error", (err) => {
+    process.stderr.write(`orchestra-memory --serve-http: server error: ${errorMessage3(err)}
+`);
+    process.exit(1);
+  });
+  server.listen(port, host, () => {
+    const addr = server.address();
+    const boundPort = addr && typeof addr === "object" && addr !== null ? addr.port : port;
+    process.stderr.write(`orchestra-memory --serve-http: listening on ${host}:${boundPort}
+`);
+  });
+  return server;
+}
+function startServeHttp() {
+  createServeHttpServer();
 }
 
 // src/tools/search.ts
@@ -22547,23 +23192,7 @@ var inputShape2 = {
   expand: external_exports.boolean().optional()
 };
 var inputSchema2 = external_exports.object(inputShape2);
-function fetchVisibleEdges(db, nodeIds, projectId) {
-  if (nodeIds.length === 0) return [];
-  const placeholders = nodeIds.map(() => "?").join(",");
-  const rows = db.prepare(
-    `SELECT sn.canonical as srcCanonical, e.predicate as predicate, dn.canonical as dstCanonical
-       FROM edges e
-       JOIN nodes sn ON sn.id = e.src_id
-       JOIN nodes dn ON dn.id = e.dst_id
-       WHERE e.invalidated_at IS NULL
-         AND e.src_id IN (${placeholders})
-         AND e.dst_id IN (${placeholders})
-         AND (e.scope = 'global' OR (e.scope IN ('project','private') AND e.project_id = ?))
-       ORDER BY e.created_at ASC`
-  ).all(...nodeIds, ...nodeIds, projectId);
-  return rows;
-}
-function handleSearch(repo, db, input, ctx) {
+async function handleSearch(repo, input, ctx) {
   const scopes = input.scope_filter;
   if (isPrivateDenied(ctx, scopes)) {
     return { text: `Rejected: ${privateDeniedMessage()}` };
@@ -22573,7 +23202,7 @@ function handleSearch(repo, db, input, ctx) {
     return { text: `Rejected: ${resolved.message}` };
   }
   const projectId = resolved.projectId;
-  const results = repo.searchObservations({
+  const results = await repo.searchObservations({
     query: input.query,
     scopes,
     projectId,
@@ -22581,9 +23210,9 @@ function handleSearch(repo, db, input, ctx) {
     includeInvalidated: input.include_invalidated ?? false
   });
   const nodeIds = [...new Set(results.map((r) => r.nodeId))];
-  const expanded = input.expand === true && nodeIds.length > 0 ? repo.expandFromNodes(nodeIds, 1, scopes, projectId) : [];
+  const expanded = input.expand === true && nodeIds.length > 0 ? await repo.expandFromNodes(nodeIds, 1, scopes, projectId) : [];
   const edgeSourceIds = input.expand === true ? expanded.map((n) => n.id) : nodeIds;
-  const edges = edgeSourceIds.length > 0 ? fetchVisibleEdges(db, edgeSourceIds, projectId) : [];
+  const edges = edgeSourceIds.length > 0 ? await repo.fetchVisibleEdges(edgeSourceIds, projectId) : [];
   const text = renderSearchResults(results, expanded, edges);
   return { text };
 }
@@ -22610,7 +23239,7 @@ function rejected(input, error2) {
     error: error2
   };
 }
-function handleLink(repo, input, ctx) {
+async function handleLink(repo, input, ctx) {
   const scope = input.scope ?? "project";
   let projectId;
   if (scope === "global") {
@@ -22631,9 +23260,9 @@ function handleLink(repo, input, ctx) {
       );
     }
   }
-  const srcNode = repo.upsertNode({ canonical: input.src, kind: "other", scope, projectId });
-  const dstNode = repo.upsertNode({ canonical: input.dst, kind: "other", scope, projectId });
-  const result = repo.upsertEdge({
+  const srcNode = await repo.upsertNode({ canonical: input.src, kind: "other", scope, projectId });
+  const dstNode = await repo.upsertNode({ canonical: input.dst, kind: "other", scope, projectId });
+  const result = await repo.upsertEdge({
     srcId: srcNode.id,
     predicate: input.predicate,
     dstId: dstNode.id,
@@ -22670,7 +23299,7 @@ var inputSchema4 = external_exports.object(inputShape4);
 function normalize2(name8) {
   return name8.trim().toLowerCase().replace(/\s+/g, " ");
 }
-function resolveEntityNode(repo, entity, projectId) {
+async function resolveEntityNode(repo, entity, projectId) {
   const normalized = normalize2(entity);
   const attempts = [{ scope: "global", projectId: null }];
   if (projectId) {
@@ -22679,12 +23308,12 @@ function resolveEntityNode(repo, entity, projectId) {
   }
   const candidates = [];
   for (const attempt of attempts) {
-    candidates.push(...repo.findSimilarNodes(entity, attempt.scope, attempt.projectId, 25));
+    candidates.push(...await repo.findSimilarNodes(entity, attempt.scope, attempt.projectId, 25));
   }
   if (candidates.length === 0) return null;
   return candidates.find((c) => c.canonical === normalized) ?? candidates[0] ?? null;
 }
-function handleTraverse(repo, db, input, ctx) {
+async function handleTraverse(repo, input, ctx) {
   const depth = Math.min(input.depth ?? 2, 4);
   const scopes = input.scope_filter;
   if (isPrivateDenied(ctx, scopes)) {
@@ -22695,11 +23324,11 @@ function handleTraverse(repo, db, input, ctx) {
     return { text: `Rejected: ${resolved.message}` };
   }
   const projectId = resolved.projectId;
-  const root = resolveEntityNode(repo, input.entity, projectId);
+  const root = await resolveEntityNode(repo, input.entity, projectId);
   if (!root) {
     return { text: `No entity found matching "${input.entity}".` };
   }
-  const expanded = repo.expandFromNodes([root.id], depth, scopes, projectId);
+  const expanded = await repo.expandFromNodes([root.id], depth, scopes, projectId);
   const nodeCap = input.max_nodes ?? TRAVERSE_NODE_CAP;
   let nodesForRender = expanded;
   let droppedCount = 0;
@@ -22709,7 +23338,7 @@ function handleTraverse(repo, db, input, ctx) {
     droppedCount = expanded.length - nodesForRender.length;
   }
   const nodeIds = nodesForRender.map((n) => n.id);
-  const edges = nodeIds.length > 0 ? fetchVisibleEdges(db, nodeIds, projectId) : [];
+  const edges = nodeIds.length > 0 ? await repo.fetchVisibleEdges(nodeIds, projectId) : [];
   let text = renderTraverse(root.canonical, depth, nodesForRender, edges, root.id);
   if (droppedCount > 0) {
     text += `
@@ -22732,40 +23361,7 @@ var inputShape5 = {
   entity: external_exports.string().optional()
 };
 var inputSchema5 = external_exports.object(inputShape5);
-function normalize3(name8) {
-  return name8.trim().toLowerCase().replace(/\s+/g, " ");
-}
-function listNodes(db, scopes, projectId, entityFilter) {
-  const params = [projectId];
-  let sql = `SELECT n.id as id, n.canonical as canonical, n.kind as kind, n.scope as scope,
-                    n.project_id as projectId, n.project_label as projectLabel
-             FROM nodes n
-             WHERE (n.scope = 'global' OR (n.scope IN ('project','private') AND n.project_id = ?))`;
-  if (scopes && scopes.length > 0) {
-    sql += ` AND n.scope IN (${scopes.map(() => "?").join(",")})`;
-    params.push(...scopes);
-  }
-  if (entityFilter) {
-    const likePattern = `%${normalize3(entityFilter).replace(/[%_]/g, "\\$&")}%`;
-    sql += ` AND (n.canonical LIKE ? ESCAPE '\\' OR n.id IN (
-                SELECT node_id FROM node_aliases WHERE alias LIKE ? ESCAPE '\\'
-             ))`;
-    params.push(likePattern, likePattern);
-  }
-  sql += " ORDER BY n.updated_at DESC LIMIT 50";
-  return db.prepare(sql).all(...params);
-}
-function listObservationsForNode(db, nodeId, projectId) {
-  return db.prepare(
-    `SELECT id, text, category, confidence, source,
-              valid_from as validFrom, invalidated_at as invalidatedAt, superseded_by as supersededBy
-       FROM observations o
-       WHERE o.node_id = ?
-         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))
-       ORDER BY o.valid_from DESC`
-  ).all(nodeId, projectId);
-}
-function handleInspect(db, input, ctx) {
+async function handleInspect(repo, input, ctx) {
   const scopes = input.scope_filter;
   if (isPrivateDenied(ctx, scopes)) {
     return { text: `Rejected: ${privateDeniedMessage()}` };
@@ -22775,11 +23371,11 @@ function handleInspect(db, input, ctx) {
     return { text: `Rejected: ${resolved.message}` };
   }
   const projectId = resolved.projectId;
-  const nodes = listNodes(db, scopes, projectId, input.entity);
-  const rows = nodes.map((n) => ({
-    ...n,
-    observations: listObservationsForNode(db, n.id, projectId)
-  }));
+  const nodes = await repo.listNodes(scopes, projectId, input.entity);
+  const rows = [];
+  for (const n of nodes) {
+    rows.push({ ...n, observations: await repo.listObservationsForNode(n.id, projectId) });
+  }
   return { text: renderInspect(rows) };
 }
 
@@ -22802,7 +23398,7 @@ var inputShape6 = {
   project_id: external_exports.string().optional()
 };
 var inputSchema6 = external_exports.object(inputShape6);
-function handleInvalidate(repo, db, input, ctx) {
+async function handleInvalidate(repo, input, ctx) {
   const hard = input.hard ?? false;
   const reasonSuffix = input.reason ? ` (${input.reason})` : "";
   if (input.observation_id == null && !input.entity) {
@@ -22815,31 +23411,31 @@ function handleInvalidate(repo, db, input, ctx) {
   }
   const projectId = resolved.projectId;
   if (input.observation_id != null) {
-    const row = db.prepare("SELECT scope, project_id as projectId FROM observations WHERE id = ?").get(input.observation_id);
-    if (!row) {
+    const target = await repo.findSupersedeTarget(input.observation_id);
+    if (!target) {
       const error2 = `observation #${input.observation_id} not found`;
       return { text: `Rejected: ${error2}.`, invalidatedIds: [], error: error2 };
     }
-    const visible = row.scope === "global" || row.projectId === projectId;
+    const visible = target.scope === "global" || target.projectId === projectId;
     if (!visible) {
       const error2 = `project_id mismatch: observation #${input.observation_id} belongs to a different project; cross-project invalidation is not permitted`;
       return { text: `Rejected: ${error2}.`, invalidatedIds: [], error: error2 };
     }
-    repo.invalidateObservation(input.observation_id, hard);
+    await repo.invalidateObservation(input.observation_id, hard);
     return {
       text: `${hard ? "Hard-deleted" : "Invalidated"} observation #${input.observation_id}${reasonSuffix}.`,
       invalidatedIds: [input.observation_id]
     };
   }
   const entity = input.entity;
-  const node = resolveEntityNode(repo, entity, projectId);
+  const node = await resolveEntityNode(repo, entity, projectId);
   if (!node) {
     return { text: `No entity found matching "${entity}".`, invalidatedIds: [], error: "entity not found" };
   }
-  const expanded = repo.expandFromNodes([node.id], 0, [node.scope], projectId)[0];
+  const expanded = (await repo.expandFromNodes([node.id], 0, [node.scope], projectId))[0];
   const validObservationIds = expanded?.observations.map((o) => o.id) ?? [];
   for (const id of validObservationIds) {
-    repo.invalidateObservation(id, hard);
+    await repo.invalidateObservation(id, hard);
   }
   return {
     text: `${hard ? "Hard-deleted" : "Invalidated"} ${validObservationIds.length} observation(s) for "${node.canonical}"${reasonSuffix}.`,
@@ -22857,12 +23453,12 @@ var inputShape7 = {
   project_id: external_exports.string().optional()
 };
 var inputSchema7 = external_exports.object(inputShape7);
-function handleStats(repo, input, ctx) {
+async function handleStats(repo, input, ctx) {
   const resolved = resolveProjectId(ctx, input.project_id);
   if (!resolved.ok) {
     return { text: `Rejected: ${resolved.message}` };
   }
-  const stats = repo.stats(resolved.projectId);
+  const stats = await repo.stats(resolved.projectId);
   return { text: renderStats(stats, resolved.projectId) };
 }
 
@@ -22880,31 +23476,14 @@ var getInputShape = {
   category: external_exports.enum(WISDOM_CATEGORIES2).optional()
 };
 var getInputSchema = external_exports.object(getInputShape);
-function listWisdomRows(db, projectId, category, limit) {
-  const categories = category ? [category] : [...WISDOM_CATEGORIES2];
-  const categoryPlaceholders = categories.map(() => "?").join(",");
-  const whereClause = `WHERE o.invalidated_at IS NULL
-         AND o.category IN (${categoryPlaceholders})
-         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))`;
-  const total = db.prepare(`SELECT COUNT(*) as count FROM observations o ${whereClause}`).get(...categories, projectId).count;
-  const rows = db.prepare(
-    `SELECT o.category as category, o.text as text, o.confidence as confidence,
-              o.valid_from as validFrom
-       FROM observations o
-       ${whereClause}
-       ORDER BY CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC,
-                o.valid_from DESC
-       LIMIT ?`
-  ).all(...categories, projectId, limit);
-  return { rows, total };
-}
-function handleWisdomGet(db, input, ctx) {
+async function handleWisdomGet(repo, input, ctx) {
   const resolved = resolveProjectId(ctx, input.project_id);
   if (!resolved.ok) {
     return { text: `Rejected: ${resolved.message}` };
   }
   const limit = input.limit ?? DEFAULT_WISDOM_LIMIT;
-  const { rows, total } = listWisdomRows(db, resolved.projectId, input.category, limit);
+  const categories = input.category ? [input.category] : [...WISDOM_CATEGORIES2];
+  const { rows, total } = await repo.listWisdomRows(categories, resolved.projectId, limit);
   const text = renderWisdom(rows);
   if (total > rows.length) {
     return { text: `${text}
@@ -22925,11 +23504,10 @@ var addInputShape = {
   scope: external_exports.enum(["project", "global", "private"]).optional()
 };
 var addInputSchema = external_exports.object(addInputShape);
-function handleWisdomAdd(repo, db, input, ctx) {
+async function handleWisdomAdd(repo, input, ctx) {
   const scope = input.scope ?? "project";
-  const result = handleSave(
+  const result = await handleSave(
     repo,
-    db,
     {
       facts: [
         {
@@ -22952,6 +23530,57 @@ function handleWisdomAdd(repo, db, input, ctx) {
 // src/server.ts
 function textResult(text) {
   return { content: [{ type: "text", text }] };
+}
+async function selectRepo() {
+  const remoteUrl = getRemoteUrl();
+  if (remoteUrl) {
+    const timeoutMs = getTimeoutMs(1e3);
+    try {
+      const health = await probeHealth(remoteUrl, timeoutMs);
+      if (health.schemaVersion !== SCHEMA_VERSION) {
+        return {
+          repo: null,
+          diagnostic: `orchestra-memory: remote server schema mismatch (server=${health.schemaVersion}, this build expects=${SCHEMA_VERSION}) \u2014 refusing to use it`
+        };
+      }
+      if (!health.ok) {
+        return {
+          repo: null,
+          diagnostic: `orchestra-memory: remote server reported unhealthy at ${remoteUrl}`
+        };
+      }
+      return {
+        repo: createRemoteRepository({ url: remoteUrl, token: getClientToken(), timeoutMs }),
+        diagnostic: null
+      };
+    } catch (err) {
+      const message = err instanceof RemoteUnavailableError ? err.message : String(err);
+      return {
+        repo: null,
+        diagnostic: `orchestra-memory: remote server unreachable at startup (${remoteUrl}): ${message}`
+      };
+    }
+  }
+  const opened = tryOpenDb();
+  return { repo: opened.db ? createRepository(opened.db) : null, diagnostic: opened.diagnostic };
+}
+async function callHandler(repoArg, diagnosticArg, fn) {
+  if (!repoArg) {
+    return textResult(
+      `orchestra-memory tools are disabled for this session: ${diagnosticArg ?? "database unavailable"}`
+    );
+  }
+  try {
+    const result = await fn(repoArg);
+    return textResult(result.text);
+  } catch (err) {
+    if (err instanceof RemoteUnavailableError) {
+      return textResult(
+        `orchestra-memory tools are disabled for this session: remote backend unavailable (${err.message})`
+      );
+    }
+    throw err;
+  }
 }
 function computeOwnProjectId() {
   try {
@@ -22979,6 +23608,14 @@ Usage:
   node dist/server.mjs --backup [--keep <n>]
       Rotate a daily snapshot of the graph.db backup. --keep defaults to 7.
 
+  node dist/server.mjs --serve-http
+      Start an HTTP server exposing the graph memory Repository over
+      POST /rpc and GET /health, bound per ORCHESTRA_MEMORY_LISTEN (default
+      127.0.0.1:8787). Requires ORCHESTRA_MEMORY_DB_PATH and
+      ORCHESTRA_MEMORY_SERVER_TOKEN per the env matrix in
+      docs/design/remote-memory-plan.md section 3; see that doc for the
+      full remote-backend design.
+
   node dist/server.mjs --help | -h
       Show this usage summary and exit.
 `;
@@ -22989,57 +23626,43 @@ async function main() {
     return;
   }
   if (argv.includes("--inject")) {
-    runInject(argv);
+    await runInject(argv);
     return;
   }
   if (argv.includes("--migrate")) {
-    runMigrate(argv);
+    await runMigrate(argv);
     return;
   }
   if (argv.includes("--backup")) {
     runBackup(argv);
     return;
   }
-  const ctx = { ownProjectId: computeOwnProjectId() };
-  const { db, diagnostic } = tryOpenDb();
-  const repo = db ? createRepository(db) : null;
-  function disabledResult() {
-    return textResult(
-      `orchestra-memory tools are disabled for this session: ${diagnostic ?? "database unavailable"}`
-    );
+  if (argv.includes("--serve-http")) {
+    startServeHttp();
+    return;
   }
-  const server = new McpServer({ name: "orchestra-memory", version: "0.2.0" });
+  const ctx = { ownProjectId: computeOwnProjectId() };
+  const { repo, diagnostic } = await selectRepo();
+  const server = new McpServer({ name: "orchestra-memory", version: SERVER_VERSION });
   server.registerTool(
     name,
     { title: "Save memory facts", description, inputSchema: inputShape },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(handleSave(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleSave(r, args, ctx))
   );
   server.registerTool(
     name2,
     { title: "Search memory", description: description2, inputSchema: inputShape2 },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(handleSearch(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleSearch(r, args, ctx))
   );
   server.registerTool(
     name3,
     { title: "Link entities", description: description3, inputSchema: inputShape3 },
-    async (args) => {
-      if (!repo) return disabledResult();
-      return textResult(handleLink(repo, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleLink(r, args, ctx))
   );
   server.registerTool(
     name4,
     { title: "Traverse graph", description: description4, inputSchema: inputShape4 },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(handleTraverse(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleTraverse(r, args, ctx))
   );
   server.registerTool(
     name5,
@@ -23048,10 +23671,7 @@ async function main() {
       description: description5,
       inputSchema: inputShape5
     },
-    async (args) => {
-      if (!db) return disabledResult();
-      return textResult(handleInspect(db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleInspect(r, args, ctx))
   );
   server.registerTool(
     name6,
@@ -23060,34 +23680,22 @@ async function main() {
       description: description6,
       inputSchema: inputShape6
     },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(handleInvalidate(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleInvalidate(r, args, ctx))
   );
   server.registerTool(
     name7,
     { title: "Memory stats", description: description7, inputSchema: inputShape7 },
-    async (args) => {
-      if (!repo) return disabledResult();
-      return textResult(handleStats(repo, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleStats(r, args, ctx))
   );
   server.registerTool(
     getName,
     { title: "Get wisdom", description: getDescription, inputSchema: getInputShape },
-    async (args) => {
-      if (!db) return disabledResult();
-      return textResult(handleWisdomGet(db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleWisdomGet(r, args, ctx))
   );
   server.registerTool(
     addName,
     { title: "Add wisdom", description: addDescription, inputSchema: addInputShape },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(handleWisdomAdd(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => handleWisdomAdd(r, args, ctx))
   );
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -23096,4 +23704,7 @@ main().catch((err) => {
   console.error("orchestra-memory: fatal error", err);
   process.exit(1);
 });
+export {
+  selectRepo
+};
 //# sourceMappingURL=server.mjs.map

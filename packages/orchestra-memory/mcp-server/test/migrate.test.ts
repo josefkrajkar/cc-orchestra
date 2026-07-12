@@ -14,7 +14,7 @@ interface CallResult {
 
 /** Runs runMigrate() with process.exit/stdout/stderr mocked so the test
  * process itself never terminates and output can be asserted on. */
-function callMigrate(argv: string[]): CallResult {
+async function callMigrate(argv: string[]): Promise<CallResult> {
   const exitCodes: Array<number | undefined> = [];
   const stdoutChunks: string[] = [];
   const stderrChunks: string[] = [];
@@ -35,7 +35,7 @@ function callMigrate(argv: string[]): CallResult {
   }) as typeof process.stderr.write);
 
   try {
-    runMigrate(argv);
+    await runMigrate(argv);
   } finally {
     exitSpy.mockRestore();
     stdoutSpy.mockRestore();
@@ -127,11 +127,11 @@ describe('migrate CLI', () => {
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  it('dry-run prints wisdom counts + md inventory and writes nothing', () => {
+  it('dry-run prints wisdom counts + md inventory and writes nothing', async () => {
     const wisdomPath = writeWisdomFixture(projectRoot);
     const { userMd, projectMd, memoryMd } = writeMdFixtures(home);
 
-    const { exitCodes, stdout, stderr } = callMigrate(['--migrate', '--project-root', projectRoot]);
+    const { exitCodes, stdout, stderr } = await callMigrate(['--migrate', '--project-root', projectRoot]);
 
     expect(exitCodes).toEqual([0]);
     expect(stderr).toBe('');
@@ -151,8 +151,8 @@ describe('migrate CLI', () => {
     expect(existsSync(defaultDbPath())).toBe(false);
   });
 
-  it('dry-run reports missing wisdom file and empty md inventory gracefully', () => {
-    const { exitCodes, stdout } = callMigrate(['--migrate', '--project-root', projectRoot]);
+  it('dry-run reports missing wisdom file and empty md inventory gracefully', async () => {
+    const { exitCodes, stdout } = await callMigrate(['--migrate', '--project-root', projectRoot]);
 
     expect(exitCodes).toEqual([0]);
     expect(stdout).toContain('Not found:');
@@ -160,7 +160,7 @@ describe('migrate CLI', () => {
     expect(existsSync(defaultDbPath())).toBe(false);
   });
 
-  it('--commit imports wisdom entries and backs up a pre-existing DB', () => {
+  it('--commit imports wisdom entries and backs up a pre-existing DB', async () => {
     writeWisdomFixture(projectRoot);
 
     // Simulate a DB that already existed from prior orchestra-memory usage.
@@ -169,7 +169,7 @@ describe('migrate CLI', () => {
     preexisting.close();
     expect(existsSync(dbPath)).toBe(true);
 
-    const { exitCodes, stdout } = callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+    const { exitCodes, stdout } = await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
 
     expect(exitCodes).toEqual([0]);
     expect(stdout).toContain('COMMIT');
@@ -226,31 +226,31 @@ describe('migrate CLI', () => {
     }
   });
 
-  it('--commit with no pre-existing DB skips backup but still imports', () => {
+  it('--commit with no pre-existing DB skips backup but still imports', async () => {
     writeWisdomFixture(projectRoot);
     expect(existsSync(defaultDbPath())).toBe(false);
 
-    const { exitCodes, stdout } = callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+    const { exitCodes, stdout } = await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
 
     expect(exitCodes).toEqual([0]);
     expect(stdout).toContain('skipped backup');
     expect(countWisdomObservations(defaultDbPath())).toBe(3);
   });
 
-  it('re-running --commit is idempotent — no duplicate observations are created', () => {
+  it('re-running --commit is idempotent — no duplicate observations are created', async () => {
     writeWisdomFixture(projectRoot);
 
-    callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+    await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
     const dbPath = defaultDbPath();
     expect(countWisdomObservations(dbPath)).toBe(3);
 
-    const { exitCodes, stdout } = callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+    const { exitCodes, stdout } = await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
     expect(exitCodes).toEqual([0]);
     expect(stdout).toContain('saved=0, duplicate=3, rejected=0');
     expect(countWisdomObservations(dbPath)).toBe(3);
   });
 
-  it('never touches original wisdom.json or markdown memory files on disk', () => {
+  it('never touches original wisdom.json or markdown memory files on disk', async () => {
     const wisdomPath = writeWisdomFixture(projectRoot);
     const { userMd, projectMd } = writeMdFixtures(home);
 
@@ -260,9 +260,9 @@ describe('migrate CLI', () => {
     const beforeUserMtime = statSync(userMd).mtimeMs;
     const beforeProjectMtime = statSync(projectMd).mtimeMs;
 
-    callMigrate(['--migrate', '--project-root', projectRoot]);
-    callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
-    callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+    await callMigrate(['--migrate', '--project-root', projectRoot]);
+    await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+    await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
 
     expect(readFileSync(wisdomPath, 'utf8')).toBe(beforeWisdom);
     expect(readFileSync(userMd, 'utf8')).toBe(beforeUserContent);
@@ -275,12 +275,12 @@ describe('migrate CLI', () => {
   // the "graph.db-wal" sidecar until checkpointed. --commit's backup must
   // force a checkpoint before copying, or a plain file copy of the main .db
   // file can silently miss un-checkpointed rows.
-  it('checkpoints the WAL before backing up, so the backup contains recently-written rows', () => {
+  it('checkpoints the WAL before backing up, so the backup contains recently-written rows', async () => {
     const dbPath = defaultDbPath();
     const liveDb = openDb(dbPath);
     const liveRepo = createRepository(liveDb);
-    const node = liveRepo.upsertNode({ canonical: 'wal test node', kind: 'other', scope: 'global' });
-    liveRepo.addObservation({
+    const node = await liveRepo.upsertNode({ canonical: 'wal test node', kind: 'other', scope: 'global' });
+    await liveRepo.addObservation({
       nodeId: node.id,
       text: 'This row must survive into the backup even before any checkpoint.',
       scope: 'global',
@@ -289,7 +289,7 @@ describe('migrate CLI', () => {
     // be sitting only in the WAL sidecar file on disk.
 
     writeWisdomFixture(projectRoot);
-    const { exitCodes, stdout } = callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+    const { exitCodes, stdout } = await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
     expect(exitCodes).toEqual([0]);
     expect(stdout).toContain('DB backed up');
 
@@ -313,7 +313,7 @@ describe('migrate CLI', () => {
     }
   });
 
-  it('supports --wisdom and --memory-dir overrides', () => {
+  it('supports --wisdom and --memory-dir overrides', async () => {
     const customWisdom = join(projectRoot, 'custom-wisdom.json');
     writeFileSync(
       customWisdom,
@@ -332,7 +332,7 @@ describe('migrate CLI', () => {
     );
     writeFileSync(join(customMemoryDir, 'MEMORY.md'), '# excluded\n');
 
-    const { stdout } = callMigrate([
+    const { stdout } = await callMigrate([
       '--migrate',
       '--project-root',
       projectRoot,
@@ -349,5 +349,66 @@ describe('migrate CLI', () => {
     expect(stdout).not.toContain('MEMORY.md');
 
     rmSync(customMemoryDir, { recursive: true, force: true });
+  });
+});
+
+// Task 4.3 (remote-memory plan, Phase 4): --commit is an Option-B punt in
+// remote mode — it refuses cleanly rather than attempting a partial
+// RemoteRepository port (no transaction verb, no local file to back up, no
+// way to run the direct valid_from SQL patch — see migrate.ts's header
+// comment for the full reasoning). Dry-run stays local-file-based and must
+// be completely unaffected by ORCHESTRA_MEMORY_URL either way.
+describe('migrate CLI — remote mode (Task 4.3)', () => {
+  let home: string;
+  let projectRoot: string;
+  let originalHome: string | undefined;
+  let originalRemoteUrl: string | undefined;
+
+  beforeEach(() => {
+    originalHome = process.env.HOME;
+    originalRemoteUrl = process.env.ORCHESTRA_MEMORY_URL;
+    home = mkdtempSync(join(tmpdir(), 'orchestra-migrate-home-'));
+    projectRoot = mkdtempSync(join(tmpdir(), 'orchestra-migrate-project-'));
+    process.env.HOME = home;
+    process.env.ORCHESTRA_MEMORY_URL = 'http://127.0.0.1:8787';
+  });
+
+  afterEach(() => {
+    process.env.HOME = originalHome;
+    if (originalRemoteUrl === undefined) {
+      delete process.env.ORCHESTRA_MEMORY_URL;
+    } else {
+      process.env.ORCHESTRA_MEMORY_URL = originalRemoteUrl;
+    }
+    rmSync(home, { recursive: true, force: true });
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  it('--commit refuses with a clear message and exits 1 when ORCHESTRA_MEMORY_URL is set', async () => {
+    writeWisdomFixture(projectRoot);
+
+    const { exitCodes, stdout, stderr } = await callMigrate(['--migrate', '--commit', '--project-root', projectRoot]);
+
+    expect(exitCodes).toEqual([1]);
+    expect(stdout).toBe('');
+    expect(stderr).toContain('orchestra-memory --migrate --commit: not supported in remote mode yet');
+    expect(stderr).toContain('run this command against the server host directly');
+    expect(stderr).toContain('ORCHESTRA_MEMORY_URL is unset');
+
+    // No local DB should have been created/touched by the refused commit.
+    expect(existsSync(defaultDbPath())).toBe(false);
+  });
+
+  it('dry-run is unaffected by ORCHESTRA_MEMORY_URL — stays local-file-based, exits 0', async () => {
+    const wisdomPath = writeWisdomFixture(projectRoot);
+
+    const { exitCodes, stdout, stderr } = await callMigrate(['--migrate', '--project-root', projectRoot]);
+
+    expect(exitCodes).toEqual([0]);
+    expect(stderr).toBe('');
+    expect(stdout).toContain('DRY RUN');
+    expect(stdout).toContain(wisdomPath);
+    expect(stdout).toContain('Total: 3 entries (2 v2 objects, 1 legacy strings)');
+    expect(existsSync(defaultDbPath())).toBe(false);
   });
 });

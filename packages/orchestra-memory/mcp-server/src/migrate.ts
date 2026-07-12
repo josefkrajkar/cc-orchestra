@@ -22,10 +22,35 @@
 // is backed up before --commit ever touches it, and the wisdom import runs
 // inside a single transaction so a mid-import failure rolls back rather than
 // leaving a partial import silently in place.
+//
+// Remote mode (docs/design/remote-memory-plan.md Phase 4, Task 4.3 — LOW
+// priority/deferrable): dry-run is PURE FILE I/O (reads .claude/
+// orchestra-wisdom.json + legacy markdown off local disk, no DB access at
+// all) and therefore stays local-only regardless of ORCHESTRA_MEMORY_URL —
+// there is nothing to route remotely. --commit, however, is a deliberate
+// Option-B punt (see the plan): it refuses cleanly when ORCHESTRA_MEMORY_URL
+// is set rather than attempting a partial remote port. Reasons a literal port
+// doesn't work cleanly: (1) commitMigration()'s local-file WAL-checkpoint +
+// copyFileSync backup only makes sense for the local sqlite file — a
+// RemoteRepository has no local file to back up (the server owns its own
+// backups, Task 3.3); (2) importWisdomFile()'s `db.exec('BEGIN IMMEDIATE')`/
+// `COMMIT` transaction has no RemoteRepository equivalent (it is a fetch-based
+// Repository implementation, one HTTP call per method, no transaction verb),
+// so a mid-import failure in remote mode could leave a partial import instead
+// of rolling back; (3) importWisdomEntry()'s direct `UPDATE observations SET
+// valid_from = ?` patch requires a raw SqliteDatabase handle that
+// RemoteRepository cannot provide, so historical wisdom-entry `ts` timestamps
+// could not be preserved. Any one of these is a real, if arguably acceptable,
+// degradation; all three together made a low-risk remote implementation not
+// worth it for a LOW-priority task — refusing cleanly (exit 1, matching
+// --commit's existing "data safety over fail-open" contract) was judged
+// safer than shipping a partially-atomic import silently. Re-run --commit
+// directly on the server host (where ORCHESTRA_MEMORY_URL is unset) instead.
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import { getRemoteUrl } from './config.js';
 import { defaultDbPath, openDb, type SqliteDatabase } from './db/connection.js';
 import { createRepository } from './db/repository.js';
 import type { ToolContext } from './tools/context.js';
@@ -300,14 +325,14 @@ interface WisdomImportSummary {
  * saved we patch valid_from directly from the wisdom entry's `ts` — the same
  * "query the underlying SqliteDatabase directly" pattern wisdom-compat.ts
  * already uses to work around the frozen repository.ts surface. */
-function importWisdomEntry(
+async function importWisdomEntry(
   db: SqliteDatabase,
   repo: ReturnType<typeof createRepository>,
   entry: WisdomEntry,
   category: WisdomCategory,
   projectId: string,
   projectLabel: string
-): 'saved' | 'duplicate' | 'rejected' {
+): Promise<'saved' | 'duplicate' | 'rejected'> {
   const isLegacy = typeof entry === 'string';
   const text = isLegacy ? entry : entry.text;
   const confidence: 'high' | 'medium' | 'low' = isLegacy ? 'medium' : entry.confidence ?? 'medium';
@@ -318,9 +343,8 @@ function importWisdomEntry(
   // projectId being imported so handleSave's Finding 1 mismatch check is
   // trivially satisfied rather than duplicating a separate trust path here.
   const ctx: ToolContext = { ownProjectId: projectId };
-  const result = handleSave(
+  const result = await handleSave(
     repo,
-    db,
     {
       facts: [
         {
@@ -350,13 +374,13 @@ function importWisdomEntry(
   return 'rejected';
 }
 
-function importWisdomFile(
+async function importWisdomFile(
   db: SqliteDatabase,
   repo: ReturnType<typeof createRepository>,
   wisdomPath: string,
   projectId: string,
   projectLabel: string
-): WisdomImportSummary {
+): Promise<WisdomImportSummary> {
   const parsed = JSON.parse(readFileSync(wisdomPath, 'utf8')) as WisdomFile;
   const summary: WisdomImportSummary = { saved: 0, duplicate: 0, rejected: 0 };
 
@@ -366,7 +390,7 @@ function importWisdomFile(
       const entries = parsed[key];
       if (!Array.isArray(entries)) continue;
       for (const entry of entries) {
-        const status = importWisdomEntry(db, repo, entry, category, projectId, projectLabel);
+        const status = await importWisdomEntry(db, repo, entry, category, projectId, projectLabel);
         summary[status] += 1;
       }
     }
@@ -397,7 +421,7 @@ export function checkpointWal(dbPath: string): void {
   }
 }
 
-function commitMigration(args: MigrateArgs): string {
+async function commitMigration(args: MigrateArgs): Promise<string> {
   const wisdomPath = args.wisdomPath ?? defaultWisdomPath(args.projectRoot);
   const wisdomExists = existsSync(wisdomPath);
 
@@ -427,7 +451,7 @@ function commitMigration(args: MigrateArgs): string {
   if (wisdomExists) {
     const projectId = computeProjectId(args.projectRoot);
     const projectLabel = basename(args.projectRoot);
-    const summary = importWisdomFile(db, repo, wisdomPath, projectId, projectLabel);
+    const summary = await importWisdomFile(db, repo, wisdomPath, projectId, projectLabel);
     lines.push(
       `Wisdom import from ${wisdomPath}: saved=${summary.saved}, duplicate=${summary.duplicate}, ` +
         `rejected=${summary.rejected} (scope=project, project_id=${projectId}).`
@@ -453,7 +477,7 @@ function commitMigration(args: MigrateArgs): string {
 /** Never throws. Dry-run always exits 0 (fail-open, even on internal error).
  * --commit exits 1 on any failure — data safety takes priority over
  * fail-open once we're about to write to the shared graph DB. */
-export function runMigrate(argv: string[]): void {
+export async function runMigrate(argv: string[]): Promise<void> {
   const args = parseArgs(argv);
 
   if (!args.commit) {
@@ -473,8 +497,26 @@ export function runMigrate(argv: string[]): void {
     return;
   }
 
+  // Task 4.3 (remote-memory plan, Phase 4) — Option B punt: --commit refuses
+  // cleanly in remote mode rather than attempting a partial port (see the
+  // header comment above for the full reasoning: no local file to back up,
+  // no transaction verb on RemoteRepository, no way to run the direct
+  // valid_from SQL patch). Dry-run above is unaffected either way — it never
+  // reaches this line, since it returns before this point.
+  if (getRemoteUrl()) {
+    process.stderr.write(
+      'orchestra-memory --migrate --commit: not supported in remote mode yet; run this command against ' +
+        'the server host directly (where ORCHESTRA_MEMORY_URL is unset) instead.\n'
+    );
+    process.exit(1);
+    // Load-bearing for the same reason as the dry-run `return` above: tests
+    // mock process.exit as a no-op, so without this return execution would
+    // fall through into the real commitMigration() call below.
+    return;
+  }
+
   try {
-    process.stdout.write(commitMigration(args) + '\n');
+    process.stdout.write((await commitMigration(args)) + '\n');
     process.exit(0);
   } catch (err) {
     process.stderr.write(`orchestra-memory --migrate --commit failed (no changes assumed committed): ${errorMessage(err)}\n`);

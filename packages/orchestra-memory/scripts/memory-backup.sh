@@ -13,8 +13,28 @@
 # The underlying `--backup` CLI mode writes nothing to stdout by contract
 # (diagnostics go to stderr only) — this script therefore produces no
 # output either.
+#
+# Remote mode (docs/design/remote-memory-plan.md Task 4.2): when
+# ORCHESTRA_MEMORY_URL is set, the client-side `--backup` invocation below
+# becomes a documented no-op. In remote mode the real data lives on the
+# remote server's own SQLite file (its /data volume, per Phase 3's Docker
+# setup), so a local `--backup --keep 7` here would only rotate a stale or
+# nonexistent local copy — the server owns its own backups (see Task 3.3:
+# `docker exec <container> node dist/server.mjs --backup`). This script
+# therefore checks ORCHESTRA_MEMORY_URL FIRST, before any of the local
+# node/bundle/version fail-open checks below, since there's no point
+# probing for a usable local Node/bundle when remote mode means we won't
+# attempt a local backup at all. The no-op prints one line to stderr only
+# (never stdout, preserving this script's "no stdout output" contract) and
+# always exits 0.
 
 set -euo pipefail
+
+# Remote mode: skip the local backup entirely — see header comment above.
+if [ -n "${ORCHESTRA_MEMORY_URL:-}" ]; then
+  echo "orchestra-memory: remote mode active (ORCHESTRA_MEMORY_URL set) — backups are server-side; skipping local backup" >&2
+  exit 0
+fi
 
 # Resolve plugin root from this script's own location — never rely on
 # CLAUDE_PLUGIN_ROOT (or any other env var) being set.

@@ -86,13 +86,26 @@ if [ -z "$PROJECT_ID" ]; then
   exit 0
 fi
 
-# The --inject CLI is synchronous, local-DB-only (no network) and designed
-# to be fast (sub-100ms per docs/design/graph-memory-design.md Phase 3). macOS ships no
-# `timeout(1)` by default, so we deliberately do NOT wrap this call in a
-# background-kill harness — that would trade a real (small) risk for a lot
-# of fragility, for a call that is fast by design and already fails open
+# The --inject CLI is local-DB-only and designed to be fast (sub-100ms per
+# docs/design/graph-memory-design.md Phase 3) UNLESS ORCHESTRA_MEMORY_URL is
+# set (docs/design/remote-memory-plan.md Task 4.1), in which case it first
+# attempts a bounded remote fetch (default 500ms timeout, overridable via
+# ORCHESTRA_MEMORY_TIMEOUT_MS) before falling back to the local DB or empty
+# output — always exiting 0 either way. macOS ships no `timeout(1)` by
+# default, so we deliberately do NOT wrap this call in a background-kill
+# harness — that would trade a real (small) risk for a lot of fragility, for
+# a call that is bounded by its own internal timeout and already fails open
 # internally (dist/server.mjs --inject never exits nonzero, never hangs on
 # I/O it doesn't control). Never propagate a nonzero exit from this line.
+#
+# ORCHESTRA_MEMORY_URL / ORCHESTRA_MEMORY_TOKEN / ORCHESTRA_MEMORY_TIMEOUT_MS
+# are read directly by the Node CLI (src/config.ts) via process.env — this
+# script does NOT need to (and must not) forward them explicitly. `node` is
+# invoked here as a plain subprocess of this script (no `env -i` / env-
+# clearing anywhere above), so any of those vars already exported in the
+# calling shell/session reach the CLI automatically through normal Unix
+# environment inheritance. Do not add explicit `VAR=$VAR node ...`
+# forwarding for these — it would be redundant.
 OUTPUT=$(node "$SERVER_ENTRY" --inject --project-id "$PROJECT_ID" --budget "$BUDGET" --inject-mode "$INJECT_MODE" 2>/dev/null || true)
 
 if [ -z "$OUTPUT" ]; then

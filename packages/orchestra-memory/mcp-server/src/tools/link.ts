@@ -38,7 +38,7 @@ function rejected(input: LinkInput, error: string): LinkOutput {
   };
 }
 
-export function handleLink(repo: Repository, input: LinkInput, ctx: ToolContext): LinkOutput {
+export async function handleLink(repo: Repository, input: LinkInput, ctx: ToolContext): Promise<LinkOutput> {
   const scope: Scope = input.scope ?? 'project';
 
   let projectId: string | null;
@@ -63,9 +63,9 @@ export function handleLink(repo: Repository, input: LinkInput, ctx: ToolContext)
     }
   }
 
-  const srcNode = repo.upsertNode({ canonical: input.src, kind: 'other', scope, projectId });
-  const dstNode = repo.upsertNode({ canonical: input.dst, kind: 'other', scope, projectId });
-  const result = repo.upsertEdge({
+  const srcNode = await repo.upsertNode({ canonical: input.src, kind: 'other', scope, projectId });
+  const dstNode = await repo.upsertNode({ canonical: input.dst, kind: 'other', scope, projectId });
+  const result = await repo.upsertEdge({
     srcId: srcNode.id,
     predicate: input.predicate,
     dstId: dstNode.id,

@@ -1,6 +1,6 @@
 {
   "name": "orchestra-memory",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Standalone cross-project graph-memory MCP server for Claude Code — SQLite-backed (node:sqlite) with FTS5 full-text search, temporal validity, and global/project/private scoping. Injects token-dense memory context at session start and after compaction. Works standalone or as the optional companion to the orchestra orchestration plugin.",
   "author": {
     "name": "Josef Krajkar"

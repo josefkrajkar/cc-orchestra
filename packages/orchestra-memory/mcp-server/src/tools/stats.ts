@@ -25,11 +25,11 @@ export interface StatsOutput {
   text: string;
 }
 
-export function handleStats(repo: Repository, input: StatsInput, ctx: ToolContext): StatsOutput {
+export async function handleStats(repo: Repository, input: StatsInput, ctx: ToolContext): Promise<StatsOutput> {
   const resolved = resolveProjectId(ctx, input.project_id);
   if (!resolved.ok) {
     return { text: `Rejected: ${resolved.message}` };
   }
-  const stats = repo.stats(resolved.projectId);
+  const stats = await repo.stats(resolved.projectId);
   return { text: renderStats(stats, resolved.projectId) };
 }

@@ -8,9 +8,9 @@
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { DatabaseSync as DatabaseSyncCtor } from 'node:sqlite';
+import { getDbPath } from '../config.js';
 
 // Type-only import — erased at compile time, never causes a runtime failure
 // even if the ambient node:sqlite types are absent.
@@ -23,8 +23,9 @@ const SCHEMA_PATH = join(moduleDir, 'schema.sql');
 /** Current schema version this codebase expects (see schema.sql `meta` table). */
 export const SCHEMA_VERSION = '1';
 
+// Overridable via ORCHESTRA_MEMORY_DB_PATH (see config.ts's getDbPath()).
 export function defaultDbPath(): string {
-  return join(homedir(), '.claude', 'orchestra-memory', 'graph.db');
+  return getDbPath();
 }
 
 export interface OpenResult {

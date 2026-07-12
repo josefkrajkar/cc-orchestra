@@ -1,7 +1,6 @@
 // memory_invalidate — soft delete (default) or hard delete of observations,
 // either by id or for every valid observation of a named entity.
 import { z } from 'zod';
-import type { SqliteDatabase } from '../db/connection.js';
 import type { Repository } from '../db/repository.js';
 import { resolveProjectId, type ToolContext } from './context.js';
 import { resolveEntityNode } from './traverse.js';
@@ -36,12 +35,11 @@ export interface InvalidateOutput {
   error?: string;
 }
 
-export function handleInvalidate(
+export async function handleInvalidate(
   repo: Repository,
-  db: SqliteDatabase,
   input: InvalidateInput,
   ctx: ToolContext
-): InvalidateOutput {
+): Promise<InvalidateOutput> {
   const hard = input.hard ?? false;
   const reasonSuffix = input.reason ? ` (${input.reason})` : '';
 
@@ -57,21 +55,22 @@ export function handleInvalidate(
   const projectId = resolved.projectId;
 
   if (input.observation_id != null) {
-    const row = db
-      .prepare('SELECT scope, project_id as projectId FROM observations WHERE id = ?')
-      .get(input.observation_id) as { scope: string; projectId: string | null } | undefined;
-    if (!row) {
+    // Unguarded fetch-by-id (same repository.ts method save.ts's supersede-target
+    // check uses) — the visibility decision is made here, explicitly, against the
+    // caller's resolved project_id, exactly as before.
+    const target = await repo.findSupersedeTarget(input.observation_id);
+    if (!target) {
       const error = `observation #${input.observation_id} not found`;
       return { text: `Rejected: ${error}.`, invalidatedIds: [], error };
     }
-    const visible = row.scope === 'global' || row.projectId === projectId;
+    const visible = target.scope === 'global' || target.projectId === projectId;
     if (!visible) {
       const error =
         `project_id mismatch: observation #${input.observation_id} belongs to a different project; ` +
         `cross-project invalidation is not permitted`;
       return { text: `Rejected: ${error}.`, invalidatedIds: [], error };
     }
-    repo.invalidateObservation(input.observation_id, hard);
+    await repo.invalidateObservation(input.observation_id, hard);
     return {
       text: `${hard ? 'Hard-deleted' : 'Invalidated'} observation #${input.observation_id}${reasonSuffix}.`,
       invalidatedIds: [input.observation_id],
@@ -79,15 +78,15 @@ export function handleInvalidate(
   }
 
   const entity = input.entity!;
-  const node = resolveEntityNode(repo, entity, projectId);
+  const node = await resolveEntityNode(repo, entity, projectId);
   if (!node) {
     return { text: `No entity found matching "${entity}".`, invalidatedIds: [], error: 'entity not found' };
   }
 
-  const expanded = repo.expandFromNodes([node.id], 0, [node.scope], projectId)[0];
+  const expanded = (await repo.expandFromNodes([node.id], 0, [node.scope], projectId))[0];
   const validObservationIds = expanded?.observations.map((o) => o.id) ?? [];
   for (const id of validObservationIds) {
-    repo.invalidateObservation(id, hard);
+    await repo.invalidateObservation(id, hard);
   }
 
   return {

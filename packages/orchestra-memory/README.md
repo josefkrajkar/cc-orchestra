@@ -80,6 +80,58 @@ This location is deliberately **user-global, not per-repository** — that's wha
 
 The last 7 daily snapshots are kept by default (older ones are pruned automatically); this gives you a rollback point if a bad migration or a corrupted write ever needs undoing. On the overwhelmingly common case — today's backup already exists — this is a single file-existence check with no database connection opened, so it adds negligible cost to session startup.
 
+## Optional: remote mode (shared Docker server)
+
+By default every machine keeps its own local `graph.db` — the section above, unchanged. If you want several machines (or several people sharing one trusted token) to see the same memory, you can instead run the bundled server in Docker on a machine of your choosing and point local Claude Code installs at it over HTTP.
+
+This is entirely **opt-in**. Leave `ORCHESTRA_MEMORY_URL` unset (the default) and nothing here applies — zero config, zero network, exactly the local behavior described above.
+
+### Quick bring-up
+
+On the machine that will host the server:
+
+```bash
+cd packages/orchestra-memory
+cp .env.example .env
+openssl rand -hex 32          # paste the output into .env as ORCHESTRA_MEMORY_SERVER_TOKEN
+docker compose up -d --build
+```
+
+See [`docker-compose.yml`](docker-compose.yml)'s own header comment for the full bring-up sequence (including rebuilding the image after a source change) and for the network-exposure guidance summarized below.
+
+### Client-side environment variables
+
+These are set in the **client** machine's own shell environment (e.g. exported from `.zshrc`/`.bashrc` before Claude Code starts — `.mcp.json` inherits the parent process environment) — not in the server's `.env` file, which is a separate, server-side concern documented in [`docker-compose.yml`](docker-compose.yml) and [`.env.example`](.env.example).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `ORCHESTRA_MEMORY_URL` | *(unset)* | Unset → local mode (default). Set to the server's base URL (e.g. `http://my-host:8787`) → remote mode. |
+| `ORCHESTRA_MEMORY_TOKEN` | — | Bearer token sent with every request. Must match the server's `ORCHESTRA_MEMORY_SERVER_TOKEN`. |
+| `ORCHESTRA_MEMORY_TIMEOUT_MS` | `1000` for MCP tool calls, `500` for `--inject`/`SessionStart` | Per-request timeout before falling back (see below). Overridable if your network is slower than the defaults assume. |
+| `ORCHESTRA_MEMORY_DB_PATH` | `~/.claude/orchestra-memory/graph.db` | Local DB path override. Works in both modes; in remote mode it's only consulted as the local fallback `--inject` reads from if the remote server is unreachable. |
+
+### `private` means per-project, not per-user
+
+**Read this before relying on `private` scope in remote mode.** v1 supports exactly one trust model: a single shared bearer token. With a shared token, `private` scope means **"visible only within this project,"** not "visible only to the one person who wrote it." Anyone holding the token and working in the same project directory sees that project's private facts — the token is the only access boundary, and it's shared. True per-user isolation (a `tenant_id` schema change) is explicitly out of scope for v1 and deferred to a future release.
+
+### Security notes
+
+- **Binds to `127.0.0.1` by default.** The compose file maps `127.0.0.1:8787:8787` — reachable only from the Docker host itself, zero extra config.
+- **TLS is required for any LAN/multi-machine exposure.** Never widen the port mapping to a non-loopback address without a reverse proxy (nginx, Caddy, Traefik) terminating TLS in front of it — a bare bearer token over plaintext HTTP on a shared network is a credential-sniffing risk.
+- **`ORCHESTRA_MEMORY_ALLOWED_ORIGINS`** (server-side, comma-separated) adds an Origin-allowlist layer on top of the token, for defense in depth once the server is reachable beyond localhost.
+- **Token rotation:** regenerate `ORCHESTRA_MEMORY_SERVER_TOKEN`, update the server's `.env`, run `docker compose up -d` to pick it up, then update `ORCHESTRA_MEMORY_TOKEN` on every client.
+
+### Backup and restore
+
+The server owns its own backups — `docker exec <container> node dist/server.mjs --backup --keep 7` against the running container. **Restoring is not just copying the backup file back** — leftover WAL/SHM sidecar files from the container's prior session will silently replay post-backup writes unless removed first. See [`mcp-server/README.md`](mcp-server/README.md)'s "Docker backup & restore" section for the complete, correct procedure — don't skip straight to `docker cp` without reading it.
+
+### Troubleshooting
+
+- **Health check:** `curl http://127.0.0.1:8787/health` on the host, or `docker compose ps` to see the container's own healthcheck status.
+- **Schema mismatch:** a client refuses to use a remote server whose `/health` `schemaVersion` doesn't match its own build's schema version. This is a deliberate safety check against silent data corruption, not a bug — rebuild/redeploy both sides from the same version. What happens next depends on the entry point: the **SessionStart/PostCompact inject hooks** fall back to the local database if one exists (empty output otherwise, always exit 0), while **MCP tool calls** (`memory_save`, `memory_search`, …) report "disabled for this session" with no local fallback — the remote backend is probed once at MCP-server startup and never retried mid-session.
+- **`--migrate --commit` refuses in remote mode.** This is deliberate (see [`mcp-server/README.md`](mcp-server/README.md)): run `--migrate --commit` directly on the server host instead (where `ORCHESTRA_MEMORY_URL` is unset), not from a client pointed at the remote server.
+- **`memory_inspect` feels slower in remote mode than other tools.** It makes one HTTP round trip per node returned by the initial lookup (not one round trip total, like every other tool) — expected, not a bug, and out of scope to optimize for now.
+
 ## It degrades gracefully
 
 Nothing about this plugin is allowed to break your session. Every entry point — both hooks and every MCP tool — is fail-open by design:
@@ -102,7 +154,8 @@ Unset, or set to anything other than exactly `index`, both hooks fail open to th
 
 ## Learn more
 
-- [`mcp-server/README.md`](mcp-server/README.md) — server internals: build/test/run, CLI modes (`--inject`, `--migrate`, `--backup`), full schema, the security model behind scoping, and the complete MCP tool reference. Also has a head-to-head positioning comparison against hosted/embedding-based memory layers and plain markdown session-memory approaches.
+- [`mcp-server/README.md`](mcp-server/README.md) — server internals: build/test/run, CLI modes (`--inject`, `--migrate`, `--backup`), full schema, the security model behind scoping, the complete MCP tool reference, and the full Docker backup/restore procedure for remote mode. Also has a head-to-head positioning comparison against hosted/embedding-based memory layers and plain markdown session-memory approaches.
+- [`docker-compose.yml`](docker-compose.yml) / [`.env.example`](.env.example) — the remote-mode server bring-up files referenced above.
 - [Repository root README](../../README.md) — how this plugin fits together with `orchestra`, the multi-agent orchestration plugin it's designed to complement.
 
 ## License

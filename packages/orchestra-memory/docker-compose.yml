@@ -1,0 +1,101 @@
+# --------------------------------------------------------------------------
+# orchestra-memory remote server — Docker Compose bring-up
+#
+# See docs/design/remote-memory-plan.md (sections 2-3, Phase 3) for the full
+# design rationale. This file packages the Task 3.1 Dockerfile as a runnable
+# service with persistent storage, a healthcheck, and a safe default network
+# posture.
+#
+# --------------------------------------------------------------------------
+# Quick start
+# --------------------------------------------------------------------------
+#   1. cp .env.example .env
+#   2. Generate a bearer token and put it in .env:
+#        openssl rand -hex 32
+#      (paste the output as ORCHESTRA_MEMORY_SERVER_TOKEN=<token> in .env)
+#   3. Build the runtime bundle the image copies in (this compose file does
+#      NOT run npm install/build itself — see Dockerfile's header comment):
+#        cd mcp-server && npm run build
+#   4. docker compose up -d --build
+#      (use --build the first time, and again any time you rebuild dist/
+#      after a source change — this compose file will happily reuse a
+#      stale image otherwise; there is no bind-mount of dist/ or a build
+#      step wired into the container, by design, per Task 3.1)
+#   5. docker compose ps            # wait for STATUS to show "healthy"
+#      curl -s http://127.0.0.1:8787/health
+#
+# --------------------------------------------------------------------------
+# Network exposure — localhost by default, LAN/multi-machine requires TLS
+# --------------------------------------------------------------------------
+# The host-side port mapping below is deliberately restricted to
+# `127.0.0.1:8787:8787`, NOT `8787:8787` / `0.0.0.0:8787:8787`. This means
+# the server is reachable only from the machine running Docker, with zero
+# extra configuration — the safe default per the plan's trust model.
+#
+# To expose this to other machines (LAN or otherwise), do NOT just widen the
+# port mapping below to `0.0.0.0:8787:8787` — that would put a plaintext,
+# bearer-token-authenticated API directly on the network with no transport
+# encryption. Instead:
+#
+#   1. Put a reverse proxy (nginx, Caddy, Traefik, etc.) in front of this
+#      service on the same host, terminating TLS there (e.g. via a
+#      Let's Encrypt / internal CA certificate).
+#   2. Have the proxy forward to 127.0.0.1:8787 (this service keeps binding
+#      loopback-only; only the proxy is reachable from the LAN/internet).
+#   3. Only widen THIS file's port mapping to a specific interface/0.0.0.0
+#      if you intentionally want the raw (non-TLS) port reachable without a
+#      proxy in front — which is not recommended.
+#   4. Set ORCHESTRA_MEMORY_ALLOWED_ORIGINS (comma-separated, server-side
+#      env var read by mcp-server/src/config.ts's getAllowedOrigins() and
+#      enforced in mcp-server/src/serve.ts) as an additional layer once this
+#      is reachable beyond localhost — it rejects cross-origin browser
+#      requests whose Origin header isn't on the allowlist.
+#
+# --------------------------------------------------------------------------
+# Backups
+# --------------------------------------------------------------------------
+# See mcp-server/README.md for backup/restore procedures (docker exec ...
+# --backup).
+# --------------------------------------------------------------------------
+
+services:
+  orchestra-memory:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestra-memory
+    restart: unless-stopped
+    ports:
+      # Host-side loopback-only bind by default — see the exposure note
+      # above before changing this.
+      - "127.0.0.1:8787:8787"
+    environment:
+      # Required — the server refuses to start without it (fail-closed;
+      # see mcp-server/src/serve.ts's createServeHttpServer()). Sourced from
+      # the sibling .env file, which Compose loads automatically for the
+      # project directory; never hardcode a token value in this file.
+      ORCHESTRA_MEMORY_SERVER_TOKEN: ${ORCHESTRA_MEMORY_SERVER_TOKEN}
+    volumes:
+      # Named volume, not a bind mount: makes /data/graph.db (+ its
+      # WAL/SHM sidecars) and /data/backups/ (see mcp-server/src/backup.ts's
+      # backupsDir(), which resolves to dirname(dbPath)/backups) survive
+      # container recreates/`docker compose down` (without -v).
+      - orchestra-memory-data:/data
+    healthcheck:
+      # node:22-slim has no curl; use a Node-based fetch instead. /health is
+      # deliberately unauthenticated (see serve.ts), so no bearer token is
+      # needed here.
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  orchestra-memory-data:

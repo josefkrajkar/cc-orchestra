@@ -93,6 +93,51 @@ Rotating daily snapshot of `~/.claude/orchestra-memory/graph.db` into `~/.claude
 - **`--keep` timing gotcha:** a changed `--keep` value only takes effect on the *next fresh copy* — rotation is coupled to the copy step, not to the daily no-op path. If you bump `--keep` mid-day after today's backup already exists, nothing is rotated until tomorrow's first backup. This is fine for a fixed daily hook invocation but worth knowing if you ever call `--backup` manually to change retention.
 - **Fail-open:** same contract as `--inject` — never throws, always exits 0, nothing on stdout, diagnostics (if any) on stderr only. No DB yet → no-op with a stderr note.
 
+### Docker backup & restore (`--serve-http` deployment)
+
+When this server runs as the Docker Compose service from Task 3.1/3.2 (`packages/orchestra-memory/Dockerfile` + `docker-compose.yml`, `node dist/server.mjs --serve-http`), `--backup` needs **zero code changes** to work: `runBackup()` resolves its DB path via `defaultDbPath()` → `getDbPath()` (`src/config.ts`), which reads `ORCHESTRA_MEMORY_DB_PATH` — and the image bakes in `ORCHESTRA_MEMORY_DB_PATH=/data/graph.db` (see the Dockerfile). `backupsDir()` resolves to `dirname(dbPath)/backups`, i.e. `/data/backups` — inside the same named `/data` volume the compose file already declares and the Dockerfile already `chown`s to the non-root `orchestra` user. There is no SessionStart hook inside the server container, so backups there are invoked manually (or via your own external scheduler) instead of automatically on every session start.
+
+**Taking a backup:**
+
+```bash
+docker exec orchestra-memory node dist/server.mjs --backup --keep 7
+```
+
+(`orchestra-memory` is the `container_name` declared in `docker-compose.yml`; run `docker compose ps` to confirm the actual name if you've customized it.) This is the exact same CLI mode documented above — same daily-no-op hot path, same WAL-checkpoint-before-copy safety net (`checkpointWal()`, reused from `migrate.ts`), same `graph-<YYYY-MM-DD>.db` rotation keeping the newest `--keep` snapshots — just invoked through `docker exec` against the container's own `/data/graph.db` instead of `~/.claude/orchestra-memory/graph.db` on the local machine. The result lands at `/data/backups/graph-<YYYY-MM-DD>.db` inside the volume, so it survives `docker compose down` (without `-v`) and container recreation.
+
+Since the server keeps a long-lived connection to the DB while running, the `checkpointWal()` step is what makes the backup actually contain recent writes — a plain file copy of a live WAL-mode database can silently miss rows that only exist in the `-wal` sidecar file. This is exercised directly in `test/backup.test.ts` (a test that writes through an intentionally-still-open connection, takes a backup, and asserts the written row survives into the backup file without ever closing/checkpointing manually).
+
+**Restoring from a backup:**
+
+1. **Stop the container** first — do not restore into a live, running server:
+   ```bash
+   docker compose stop orchestra-memory
+   # or: docker stop orchestra-memory
+   ```
+2. **Copy the desired backup over the live DB.** `/data` is a named volume, not a bind mount, so the straightforward way to move files in and out is `docker cp` against the (stopped) container:
+   ```bash
+   docker cp orchestra-memory:/data/backups/graph-2026-07-10.db /tmp/restore.db
+   docker cp /tmp/restore.db orchestra-memory:/data/graph.db
+   ```
+   `docker cp` works against a stopped container (it only needs the container to exist, not be running) — verified directly against this image.
+3. **Delete the stale `-wal`/`-shm` sidecar files.** This step is load-bearing and easy to miss: `graph.db-wal`/`graph.db-shm` from *before* the restore are still sitting in `/data` after step 2 replaces `graph.db` alone. SQLite replays any leftover WAL frames the next time it opens the file — so without this step, writes made *after* the backup was taken quietly reappear once the server restarts, and the restore silently does nothing. Since the container is stopped (no `docker exec`), remove them via a throwaway container sharing the same volume:
+   ```bash
+   docker run --rm --volumes-from orchestra-memory alpine rm -f /data/graph.db-wal /data/graph.db-shm
+   ```
+   (This was confirmed necessary and sufficient by direct testing: restoring `graph.db` alone left a post-backup row intact via WAL replay; removing the sidecars first produced a restore that exactly matched the backup's contents.)
+4. **Restart:**
+   ```bash
+   docker compose start orchestra-memory
+   # or: docker compose up -d
+   ```
+5. **Sanity-check** the restore landed correctly:
+   ```bash
+   curl -s http://127.0.0.1:8787/health
+   ```
+   and/or call `memory_stats` through a client configured to point at the server, to confirm row counts match what you expect from the restored snapshot.
+
+This mirrors the local (non-Docker) daily-backup behavior described above exactly — same file format (`graph-<YYYY-MM-DD>.db`), same rotation logic, same `checkpointWal()` safety net — the only difference is *how* it's invoked: a `SessionStart` hook (`scripts/memory-backup.sh`) drives it locally, while in the containerized deployment there is no SessionStart hook running inside the server, so `docker exec` (manual or externally scheduled, e.g. cron/systemd-timer on the Docker host) takes its place.
+
 ## Database
 
 Location: `~/.claude/orchestra-memory/graph.db` (user-global, **not** per-repo — this is what makes cross-project sharing possible). WAL journal mode, `busy_timeout=5000` for concurrent sessions/subagents writing at once. Schema versioned via a `meta` table (`schema_version`); `connection.ts` throws on an unrecognized version rather than guessing a migration path.

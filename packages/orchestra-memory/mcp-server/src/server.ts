@@ -14,11 +14,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { tryOpenDb } from './db/connection.js';
-import { createRepository } from './db/repository.js';
+import { tryOpenDb, SCHEMA_VERSION } from './db/connection.js';
+import { createRepository, type Repository } from './db/repository.js';
 import { runBackup } from './backup.js';
 import { runInject } from './inject.js';
 import { computeProjectId, runMigrate } from './migrate.js';
+import { startServeHttp, SERVER_VERSION } from './serve.js';
+import { getRemoteUrl, getClientToken, getTimeoutMs } from './config.js';
+import { createRemoteRepository, probeHealth, RemoteUnavailableError } from './remote/client.js';
 
 import * as saveTool from './tools/save.js';
 import * as searchTool from './tools/search.js';
@@ -32,6 +35,91 @@ import type { ToolContext } from './tools/context.js';
 
 function textResult(text: string): CallToolResult {
   return { content: [{ type: 'text', text }] };
+}
+
+export interface BackendSelection {
+  repo: Repository | null;
+  diagnostic: string | null;
+}
+
+/**
+ * Chooses between the remote HTTP backend and local SQLite, per
+ * docs/design/remote-memory-plan.md section 3/Phase 1: `ORCHESTRA_MEMORY_URL`
+ * set => remote mode (probing /health at startup with a short bounded
+ * timeout before committing to it); unset => today's local-only behavior,
+ * unchanged.
+ *
+ * Fail-open contract: on ANY remote-mode failure (network error, timeout,
+ * non-200, malformed response, or a schemaVersion mismatch against this
+ * build's own SCHEMA_VERSION) this falls back to `{ repo: null, diagnostic }`
+ * — never throws, never hangs. Exported (rather than inlined in main()) so a
+ * later integration-test task can exercise this branch directly.
+ */
+export async function selectRepo(): Promise<BackendSelection> {
+  const remoteUrl = getRemoteUrl();
+  if (remoteUrl) {
+    const timeoutMs = getTimeoutMs(1000);
+    try {
+      const health = await probeHealth(remoteUrl, timeoutMs);
+      if (health.schemaVersion !== SCHEMA_VERSION) {
+        return {
+          repo: null,
+          diagnostic: `orchestra-memory: remote server schema mismatch (server=${health.schemaVersion}, this build expects=${SCHEMA_VERSION}) — refusing to use it`,
+        };
+      }
+      if (!health.ok) {
+        return {
+          repo: null,
+          diagnostic: `orchestra-memory: remote server reported unhealthy at ${remoteUrl}`,
+        };
+      }
+      return {
+        repo: createRemoteRepository({ url: remoteUrl, token: getClientToken(), timeoutMs }),
+        diagnostic: null,
+      };
+    } catch (err) {
+      const message = err instanceof RemoteUnavailableError ? err.message : String(err);
+      return {
+        repo: null,
+        diagnostic: `orchestra-memory: remote server unreachable at startup (${remoteUrl}): ${message}`,
+      };
+    }
+  }
+
+  const opened = tryOpenDb();
+  return { repo: opened.db ? createRepository(opened.db) : null, diagnostic: opened.diagnostic };
+}
+
+/**
+ * Routes every tool handler call through a single fail-open seam. A null
+ * `repoArg` means the backend was never available (startup probe failed or
+ * local DB open failed) — degrade immediately. A `RemoteUnavailableError`
+ * thrown mid-call (server restart, network blip after a successful startup
+ * probe) degrades that ONE call the same way rather than crashing the tool
+ * invocation or surfacing as an unhandled rejection. Any other thrown error
+ * is a real local bug and is left to propagate as before.
+ */
+async function callHandler(
+  repoArg: Repository | null,
+  diagnosticArg: string | null,
+  fn: (repo: Repository) => Promise<{ text: string }>
+): Promise<CallToolResult> {
+  if (!repoArg) {
+    return textResult(
+      `orchestra-memory tools are disabled for this session: ${diagnosticArg ?? 'database unavailable'}`
+    );
+  }
+  try {
+    const result = await fn(repoArg);
+    return textResult(result.text);
+  } catch (err) {
+    if (err instanceof RemoteUnavailableError) {
+      return textResult(
+        `orchestra-memory tools are disabled for this session: remote backend unavailable (${err.message})`
+      );
+    }
+    throw err;
+  }
 }
 
 /**
@@ -71,6 +159,14 @@ Usage:
   node dist/server.mjs --backup [--keep <n>]
       Rotate a daily snapshot of the graph.db backup. --keep defaults to 7.
 
+  node dist/server.mjs --serve-http
+      Start an HTTP server exposing the graph memory Repository over
+      POST /rpc and GET /health, bound per ORCHESTRA_MEMORY_LISTEN (default
+      127.0.0.1:8787). Requires ORCHESTRA_MEMORY_DB_PATH and
+      ORCHESTRA_MEMORY_SERVER_TOKEN per the env matrix in
+      docs/design/remote-memory-plan.md section 3; see that doc for the
+      full remote-backend design.
+
   node dist/server.mjs --help | -h
       Show this usage summary and exit.
 `;
@@ -82,65 +178,50 @@ async function main(): Promise<void> {
     return;
   }
   if (argv.includes('--inject')) {
-    runInject(argv);
+    await runInject(argv);
     return;
   }
   if (argv.includes('--migrate')) {
-    runMigrate(argv);
+    await runMigrate(argv);
     return;
   }
   if (argv.includes('--backup')) {
     runBackup(argv);
     return;
   }
+  if (argv.includes('--serve-http')) {
+    startServeHttp();
+    return;
+  }
 
   const ctx: ToolContext = { ownProjectId: computeOwnProjectId() };
 
-  const { db, diagnostic } = tryOpenDb();
-  const repo = db ? createRepository(db) : null;
+  const { repo, diagnostic } = await selectRepo();
 
-  function disabledResult(): CallToolResult {
-    return textResult(
-      `orchestra-memory tools are disabled for this session: ${diagnostic ?? 'database unavailable'}`
-    );
-  }
-
-  const server = new McpServer({ name: 'orchestra-memory', version: '0.2.0' });
+  const server = new McpServer({ name: 'orchestra-memory', version: SERVER_VERSION });
 
   server.registerTool(
     saveTool.name,
     { title: 'Save memory facts', description: saveTool.description, inputSchema: saveTool.inputShape },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(saveTool.handleSave(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => saveTool.handleSave(r, args, ctx))
   );
 
   server.registerTool(
     searchTool.name,
     { title: 'Search memory', description: searchTool.description, inputSchema: searchTool.inputShape },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(searchTool.handleSearch(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => searchTool.handleSearch(r, args, ctx))
   );
 
   server.registerTool(
     linkTool.name,
     { title: 'Link entities', description: linkTool.description, inputSchema: linkTool.inputShape },
-    async (args) => {
-      if (!repo) return disabledResult();
-      return textResult(linkTool.handleLink(repo, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => linkTool.handleLink(r, args, ctx))
   );
 
   server.registerTool(
     traverseTool.name,
     { title: 'Traverse graph', description: traverseTool.description, inputSchema: traverseTool.inputShape },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(traverseTool.handleTraverse(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => traverseTool.handleTraverse(r, args, ctx))
   );
 
   server.registerTool(
@@ -150,10 +231,7 @@ async function main(): Promise<void> {
       description: inspectTool.description,
       inputSchema: inspectTool.inputShape,
     },
-    async (args) => {
-      if (!db) return disabledResult();
-      return textResult(inspectTool.handleInspect(db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => inspectTool.handleInspect(r, args, ctx))
   );
 
   server.registerTool(
@@ -163,37 +241,25 @@ async function main(): Promise<void> {
       description: invalidateTool.description,
       inputSchema: invalidateTool.inputShape,
     },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(invalidateTool.handleInvalidate(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => invalidateTool.handleInvalidate(r, args, ctx))
   );
 
   server.registerTool(
     statsTool.name,
     { title: 'Memory stats', description: statsTool.description, inputSchema: statsTool.inputShape },
-    async (args) => {
-      if (!repo) return disabledResult();
-      return textResult(statsTool.handleStats(repo, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => statsTool.handleStats(r, args, ctx))
   );
 
   server.registerTool(
     wisdomTool.getName,
     { title: 'Get wisdom', description: wisdomTool.getDescription, inputSchema: wisdomTool.getInputShape },
-    async (args) => {
-      if (!db) return disabledResult();
-      return textResult(wisdomTool.handleWisdomGet(db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => wisdomTool.handleWisdomGet(r, args, ctx))
   );
 
   server.registerTool(
     wisdomTool.addName,
     { title: 'Add wisdom', description: wisdomTool.addDescription, inputSchema: wisdomTool.addInputShape },
-    async (args) => {
-      if (!repo || !db) return disabledResult();
-      return textResult(wisdomTool.handleWisdomAdd(repo, db, args, ctx).text);
-    }
+    async (args) => callHandler(repo, diagnostic, (r) => wisdomTool.handleWisdomAdd(r, args, ctx))
   );
 
   const transport = new StdioServerTransport();

@@ -13,5 +13,12 @@ backups/
 # OS cruft
 .DS_Store
 
+# Local secrets (e.g. packages/orchestra-memory/.env holding
+# ORCHESTRA_MEMORY_SERVER_TOKEN for docker-compose) — never commit a real
+# token. .env.example is the tracked template and must stay trackable.
+.env
+.env.*
+!.env.example
+
 # NOTE: mcp-server/dist/ is intentionally COMMITTED (plugins ship the prebuilt
 # bundle; consumers do not run a build step). Do not add dist/ here.

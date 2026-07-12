@@ -2,6 +2,17 @@
 # orchestra-memory — PostCompact Hook
 # Re-injects graph memory after context compaction (smaller budget than
 # SessionStart). Fail-open. Resolves the MCP server under this plugin's root.
+#
+# Remote mode (docs/design/remote-memory-plan.md Task 4.2 — verified, no
+# script-level change needed): the `--inject` invocation below is the exact
+# same CLI mode memory-inject.sh calls, made remote-aware entirely inside
+# src/inject.ts's runInject() (Task 4.1). URL set + server reachable -> remote
+# fetch; URL set + unreachable/erroring -> local DB fallback; local DB also
+# absent -> empty output. Always exits 0. ORCHESTRA_MEMORY_URL /
+# ORCHESTRA_MEMORY_TOKEN / ORCHESTRA_MEMORY_TIMEOUT_MS need no explicit
+# forwarding here: `node` is invoked below as a plain subprocess (no `env -i`
+# / env-clearing anywhere in this script), so anything exported in the
+# calling shell/session reaches the CLI via normal Unix env inheritance.
 set -euo pipefail
 INPUT=$(cat)
 if ! command -v jq &>/dev/null; then

@@ -3,8 +3,7 @@
 // canonicalizes entities, dedupes against existing observations, and writes
 // nodes/observations/edges.
 import { z } from 'zod';
-import type { SqliteDatabase } from '../db/connection.js';
-import type { Repository, Scope } from '../db/repository.js';
+import { NEAR_DUP_RANK_THRESHOLD, type Repository, type Scope } from '../db/repository.js';
 import { normalizeForDedupe, validateFact, type FactInput } from '../distill.js';
 import {
   renderSaveResult,
@@ -62,8 +61,8 @@ export const inputShape = {
   project_id: z.string().optional(),
   project_label: z.string().optional(),
   source: z.string().optional(),
-  // Bypasses the near-duplicate guard (see findNearDuplicate below) for every
-  // fact in this call — use when a high-similarity match is a false positive.
+  // Bypasses the near-duplicate guard (see Repository.findNearDuplicate) for
+  // every fact in this call — use when a high-similarity match is a false positive.
   allow_near_duplicate: z.boolean().optional(),
 };
 
@@ -90,181 +89,12 @@ function rejectedResult(error: string): SaveOutput {
 
 // --- Near-duplicate guard (D8) -------------------------------------------
 //
-// SQLite FTS5's default MATCH semantics AND every whitespace-delimited term
-// together (see db/repository.ts's sanitizeFtsQuery, which quotes each
-// token as its own phrase — bare quoted phrases are implicitly AND-ed).
-// That means calling repo.searchObservations() with a fact's full raw text
-// as the query requires a candidate to contain literally *every* word of
-// that text. Empirically (scratch experiment against two real-world
-// duplicate pairs pulled from this project's own memory — a
-// project_id/sha256 formula note and a process.exit()/vitest-mock note) a
-// literal full-text query returns zero candidates for either pair, in
-// either direction: real paraphrases never share 100% of their vocabulary.
-//
-// To make the guard actually useful without touching the frozen
-// repository, the query fed to searchObservations is built from a handful
-// of the fact's "anchor" words instead of its full text: significant
-// (non-stopword, length >= MIN_TOKEN_LEN) words that already occur in at
-// least one existing valid/visible observation, preferring the rarest
-// ones. AND-ing just those few — relaxing down to fewer anchors if the
-// full set doesn't co-occur in a single candidate — reliably surfaces
-// same-topic restatements while still requiring several specific words to
-// coincide, which keeps unrelated facts from colliding by chance.
-const MIN_TOKEN_LEN = 4;
-const CANDIDATE_WORD_CAP = 20;
-const MIN_ANCHOR_WORDS = 3;
-const MAX_ANCHOR_WORDS = 6;
-const ANCHOR_DF_SEARCH_LIMIT = 50;
-
-/**
- * BM25 rank threshold (SQLite returns bm25() as a "rank": negative, lower
- * is a stronger match). Empirical basis — anchor-word AND-queries (as
- * described above) against the two mandated real-world duplicate pairs:
- *   - "project_id = sha256(path+trailing newline) truncated to 16 hex"
- *     note vs its restatement: rank -6.18 one direction, -3.73 the other.
- *   - "process.exit()/vitest mock, don't remove the return" note vs its
- *     restatement: rank -4.20 (one direction only — the other direction's
- *     anchor set didn't converge on the same candidate, which is the
- *     accepted miss for this more heavily paraphrased pair).
- *   - Two additional constructed near-dup pairs (SQLite/FTS5 restatement,
- *     REST->GraphQL migration restatement) scored -11.8 to -12.1.
- *   - Every coincidental-overlap control tried (facts sharing 2-3 generic
- *     words by chance, e.g. two unrelated "TypeScript ... project ...
- *     testing" sentences) never even reached this rank check — the anchor
- *     selection above already rejected it for having too few candidates
- *     that share a common document.
- * -3.5 sits just above (less strict than) the weakest true positive
- * observed (-3.73), so ordinary corpus-composition variance in a real
- * graph.db doesn't flip that case into a miss, while remaining far
- * stricter than a typical single/double-anchor incidental score.
- *
- * Corpus-size caveat: BM25's IDF term is a function of how many documents
- * in the corpus contain each word, so its magnitude shrinks toward zero as
- * the corpus shrinks — with exactly one prior observation to compare
- * against, even a perfect anchor match scores roughly -0.000006, nowhere
- * near this threshold. All the empirical numbers above (and this guard's
- * behavior generally) assume a corpus with some pre-existing topical
- * diversity, which is the realistic case once a project has accumulated
- * more than a couple of facts. In a brand-new/near-empty project this
- * guard is correspondingly weaker — an acceptable false negative under the
- * fail-open philosophy, not a correctness bug.
- */
-export const NEAR_DUP_RANK_THRESHOLD = -3.5;
-
-// A deliberately small, generic English stopword list — just enough to keep
-// filler/connective words out of the anchor pool. Not exhaustive; false
-// negatives here only make the guard slightly less effective, never unsafe.
-const STOPWORDS = new Set(
-  `a an the and or but if then else for nor so yet
-   of to in on at by with from into onto up down out over under again further
-   is are was were be been being have has had do does did doing will would
-   shall should may might must can could this that these those it its
-   as not no never always about above below between through during before
-   after once here there when where why how all any both each few more most
-   other some such only own same than too very just also across still
-   i you he she we they them his her our your their what which who whom
-   because while against without within per via etc used use uses using`
-    .split(/\s+/)
-    .filter(Boolean)
-);
-
-/** Extracts unique, lowercased, stopword/short-word-filtered tokens from
- * free text, in first-seen order, capped at CANDIDATE_WORD_CAP to bound the
- * document-frequency lookups below. */
-function significantWords(text: string): string[] {
-  const seen = new Set<string>();
-  const words: string[] = [];
-  for (const match of text.toLowerCase().matchAll(/[a-z0-9]+/g)) {
-    const word = match[0];
-    if (word.length < MIN_TOKEN_LEN || STOPWORDS.has(word) || seen.has(word)) continue;
-    seen.add(word);
-    words.push(word);
-    if (words.length >= CANDIDATE_WORD_CAP) break;
-  }
-  return words;
-}
-
-interface NearDupMatch {
-  observationId: number;
-  rank: number;
-}
-
-/**
- * Looks for an existing near-duplicate of `text` among valid (not
- * invalidated), caller-visible observations in `scope`/`projectId` —
- * visibility and validity are enforced by repo.searchObservations() itself
- * (its scopeGuard/scopeAllowlist and default `includeInvalidated: false`),
- * never re-implemented here. This is a best-effort heuristic, not a
- * security boundary: it fails open on any error (including a pathological
- * MATCH failure on unusual fact text) by returning null, so a previously-
- * valid save can never be blocked by this check misbehaving.
- */
-function findNearDuplicate(
-  repo: Repository,
-  text: string,
-  scope: Scope,
-  projectId: string | null
-): NearDupMatch | null {
-  try {
-    const words = significantWords(text);
-    if (words.length < MIN_ANCHOR_WORDS) return null;
-
-    const scored = words.map((word, index) => ({
-      word,
-      index,
-      // Document-frequency proxy: how many existing valid/visible
-      // observations already contain this word. A word with df=0 can never
-      // contribute to a match and is dropped before ranking.
-      df: repo.searchObservations({ query: word, scopes: [scope], projectId, limit: ANCHOR_DF_SEARCH_LIMIT })
-        .length,
-    }));
-    const candidates = scored.filter((c) => c.df > 0);
-    if (candidates.length < MIN_ANCHOR_WORDS) return null;
-
-    // Rarest (lowest df) words first; longer words as a specificity
-    // tiebreak; original position as a final stable tiebreak.
-    candidates.sort((a, b) => a.df - b.df || b.word.length - a.word.length || a.index - b.index);
-    const pool = candidates.slice(0, MAX_ANCHOR_WORDS).map((c) => c.word);
-
-    // The full anchor pool may not all co-occur in one candidate (an anchor
-    // can have df>0 only because it matches a *different*, unrelated
-    // observation) — relax by shrinking from the least-confident end until
-    // a match is found or the floor (MIN_ANCHOR_WORDS) is hit.
-    for (let size = pool.length; size >= MIN_ANCHOR_WORDS; size--) {
-      const query = pool.slice(0, size).join(' ');
-      const rows = repo.searchObservations({ query, scopes: [scope], projectId, limit: 5 });
-      const best = rows[0];
-      if (best) {
-        return { observationId: best.observationId, rank: best.rank };
-      }
-    }
-    return null;
-  } catch {
-    // Fail open — see function doc comment.
-    return null;
-  }
-}
-
-interface SupersedeTarget {
-  id: number;
-  scope: Scope;
-  projectId: string | null;
-  invalidatedAt: string | null;
-}
-
-/** Repository gap: db/repository.ts exposes no "get observation by id"
- * method (only FTS search / graph expansion). Since repository.ts is
- * frozen, this queries the underlying SqliteDatabase directly, the same
- * direct-SQL pattern already used elsewhere (tools/search.ts's
- * fetchVisibleEdges, tools/inspect.ts, tools/wisdom-compat.ts). */
-function fetchSupersedeTarget(db: SqliteDatabase, id: number): SupersedeTarget | undefined {
-  return db
-    .prepare(
-      `SELECT id, scope, project_id as projectId, invalidated_at as invalidatedAt
-       FROM observations WHERE id = ?`
-    )
-    .get(id) as SupersedeTarget | undefined;
-}
+// The heuristic itself (anchor-word selection, BM25 rank threshold) now
+// lives in repository.ts as Repository.findNearDuplicate() — see that
+// method's doc comment for the full empirical calibration rationale. This
+// file imports (and re-exports) the threshold constant so external
+// importers of `NEAR_DUP_RANK_THRESHOLD` from `tools/save.js` keep working.
+export { NEAR_DUP_RANK_THRESHOLD };
 
 /** Validates a memory_save fact's supersedes_observation_id against the
  * trust-boundary rules: the old observation must exist, still be valid (not
@@ -272,12 +102,12 @@ function fetchSupersedeTarget(db: SqliteDatabase, id: number): SupersedeTarget |
  * project identity (global, or owned by this project) — never under a
  * caller-supplied project_id. Returns an error string on failure, or null
  * when the target is safe to supersede. */
-function validateSupersedeTarget(
-  db: SqliteDatabase,
+async function validateSupersedeTarget(
+  repo: Repository,
   supersedesId: number,
   effectiveProjectId: string | null
-): string | null {
-  const target = fetchSupersedeTarget(db, supersedesId);
+): Promise<string | null> {
+  const target = await repo.findSupersedeTarget(supersedesId);
   if (!target) {
     return `supersedes_observation_id ${supersedesId} does not exist`;
   }
@@ -291,12 +121,11 @@ function validateSupersedeTarget(
   return null;
 }
 
-export function handleSave(
+export async function handleSave(
   repo: Repository,
-  db: SqliteDatabase,
   input: SaveInput,
   ctx: ToolContext
-): SaveOutput {
+): Promise<SaveOutput> {
   const scope: Scope = input.scope ?? 'project';
 
   let projectId: string | null;
@@ -335,7 +164,7 @@ export function handleSave(
       // Ownership is always checked against the SERVER's own project identity,
       // never a caller-supplied project_id — a global-scope save must not be
       // able to supersede another project's facts (sentinel round-2 P0).
-      const supersedeError = validateSupersedeTarget(db, fact.supersedes_observation_id, ctx.ownProjectId);
+      const supersedeError = await validateSupersedeTarget(repo, fact.supersedes_observation_id, ctx.ownProjectId);
       if (supersedeError) {
         factOutcomes.push({ entity: fact.entity.name, status: 'rejected', reason: supersedeError });
         continue;
@@ -343,7 +172,7 @@ export function handleSave(
       supersedesId = fact.supersedes_observation_id;
     }
 
-    const nodeResult = repo.upsertNode({
+    const nodeResult = await repo.upsertNode({
       canonical: fact.entity.name,
       kind: fact.entity.kind || 'other',
       scope,
@@ -352,7 +181,7 @@ export function handleSave(
       aliases: fact.aliases,
     });
 
-    const existingNode = repo.expandFromNodes([nodeResult.id], 0, [scope], projectId)[0];
+    const existingNode = (await repo.expandFromNodes([nodeResult.id], 0, [scope], projectId))[0];
     const normalizedNewText = normalizeForDedupe(fact.text);
     const duplicate = existingNode?.observations.find(
       (obs) => normalizeForDedupe(obs.text) === normalizedNewText
@@ -371,7 +200,7 @@ export function handleSave(
     // is set (supersession is the intended, explicit dedup flow) or when the
     // caller opted in via allow_near_duplicate:true.
     if (supersedesId == null && input.allow_near_duplicate !== true) {
-      const nearDup = findNearDuplicate(repo, fact.text, scope, projectId);
+      const nearDup = await repo.findNearDuplicate(fact.text, scope, projectId);
       if (nearDup && nearDup.rank <= NEAR_DUP_RANK_THRESHOLD) {
         factOutcomes.push({
           entity: fact.entity.name,
@@ -383,7 +212,7 @@ export function handleSave(
       }
     }
 
-    const observationId = repo.addObservation({
+    const observationId = await repo.addObservation({
       nodeId: nodeResult.id,
       text: fact.text.trim(),
       scope,
@@ -394,7 +223,7 @@ export function handleSave(
     });
 
     if (supersedesId != null) {
-      repo.supersedeObservation(supersedesId, observationId);
+      await repo.supersedeObservation(supersedesId, observationId);
     }
 
     factOutcomes.push({
@@ -408,21 +237,21 @@ export function handleSave(
 
   const relationOutcomes: RelationOutcome[] = [];
   for (const relation of input.relations ?? []) {
-    const srcNode = repo.upsertNode({
+    const srcNode = await repo.upsertNode({
       canonical: relation.src,
       kind: 'other',
       scope,
       projectId,
       projectLabel: input.project_label ?? null,
     });
-    const dstNode = repo.upsertNode({
+    const dstNode = await repo.upsertNode({
       canonical: relation.dst,
       kind: 'other',
       scope,
       projectId,
       projectLabel: input.project_label ?? null,
     });
-    const edge = repo.upsertEdge({
+    const edge = await repo.upsertEdge({
       srcId: srcNode.id,
       predicate: relation.predicate,
       dstId: dstNode.id,

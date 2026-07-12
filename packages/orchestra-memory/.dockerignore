@@ -1,0 +1,41 @@
+# Build context here is packages/orchestra-memory/ -- see Dockerfile's
+# header comment for why. The Dockerfile only COPYs
+# mcp-server/dist/{server.mjs,server.mjs.map,schema.sql}; everything else
+# below is excluded for hygiene / smaller build-context uploads in case the
+# Dockerfile's COPY set broadens later.
+
+# VCS / OS cruft
+.git
+**/.git
+.DS_Store
+**/.DS_Store
+
+# Docs
+*.md
+**/*.md
+
+# Node
+node_modules
+**/node_modules
+mcp-server/coverage
+**/*.log
+
+# Source, tests, and build tooling -- not needed at runtime, image only
+# ships the prebuilt mcp-server/dist/* bundle.
+mcp-server/src
+mcp-server/test
+mcp-server/tsconfig.json
+mcp-server/vitest.config.ts
+mcp-server/esbuild.config.mjs
+
+# Other Orchestra tooling not needed inside the image
+scripts
+.claude
+.claude-plugin
+.mcp.json
+
+# Compose / env (owned by a separate task; never bake secrets into the image)
+docker-compose.yml
+.env
+.env.*
+!.env.example

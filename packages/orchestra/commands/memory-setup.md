@@ -25,6 +25,8 @@ fi
 
 Report the exact version string. `orchestra-memory` requires **Node ≥ 22.5** (needs the stable `node:sqlite` builtin). If node is missing or below 22.5, tell the user clearly that graph memory tools will be unavailable this session (the MCP server and all hooks fail open — nothing else in Orchestra breaks), and stop here — there's nothing else useful to diagnose without a working Node.
 
+**Remote mode note:** if `ORCHESTRA_MEMORY_URL` is set in the environment, mention that remote mode is active as part of this baseline. Try a quick, best-effort `curl -s --max-time 2 "$ORCHESTRA_MEMORY_URL/health"` and, if it succeeds, report the returned `schemaVersion`/`serverVersion` alongside the local diagnosis. This probe must stay purely informational — never block or fail this step on it. If the server is unreachable or the curl times out, just note "remote server unreachable, continuing with local prerequisite checks" and fall through to the rest of Step 1 exactly as if `ORCHESTRA_MEMORY_URL` were unset — this matches the client's own fail-open behavior (remote mode degrades to local/disabled, never hangs).
+
 ### 1b. MCP server bundle
 
 Probe for the built bundle the same way `commands/memory-migrate.md` does — don't assume `${CLAUDE_PLUGIN_ROOT}` is set:
@@ -72,6 +74,8 @@ If yes, follow the exact procedure documented in `commands/memory-migrate.md` (S
 
 If no, mention that `/memory-migrate` can be run standalone at any later point and move on.
 
+**Remote mode note:** `--migrate --commit` refuses immediately (exit 1, no DB touched) when `ORCHESTRA_MEMORY_URL` is set — this is a deliberate, documented scope limitation, not a bug. If the user is in remote mode and wants to migrate, tell them to run `/memory-migrate` (or the underlying CLI's `--migrate --commit`) directly on the server host instead, where `ORCHESTRA_MEMORY_URL` is unset — do not attempt the commit against the client's remote-pointed session.
+
 ## Step 3: Instructions to disable built-in auto-memory
 
 **Do not edit `~/.claude/settings.json` yourself, under any circumstances.** Print the exact snippet and ask the user to add it themselves:
@@ -94,6 +98,7 @@ Tell the user explicitly:
    - `memory_save` a trivial, clearly-synthetic fact, e.g. `{facts: [{entity: {name: "memory-setup smoke test", kind: "fact"}, text: "memory-setup smoke test executed successfully."}], scope: "project", project_id: <sha256-16 of $PWD>, source: "memory-setup:smoke-test"}`.
    - `memory_search` for `"memory-setup smoke test"` and confirm the fact comes back.
    - Clean up immediately after: call `memory_invalidate` with `{entity: "memory-setup smoke test", hard: true}` — this is a synthetic test entry with no lasting value, so a hard delete (rather than the default soft delete) is appropriate here to avoid leaving smoke-test noise in the graph.
+   - If `ORCHESTRA_MEMORY_URL` is set, this same roundtrip exercises the full remote HTTP RPC path (client → server → SQLite and back) rather than a local in-process call — a nice-to-have confidence check that a fresh remote deployment actually works end-to-end, not just that `/health` responds.
 3. Report a summary to the user:
    - Node version found (or "not found / too old").
    - Whether the MCP bundle was already built, freshly built, or still missing.

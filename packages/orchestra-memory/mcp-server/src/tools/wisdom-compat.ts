@@ -2,20 +2,10 @@
 // for Orchestra's existing wisdom concept (conventions/gotchas/decisions/
 // failed_approaches). wisdom_add is a thin wrapper over memory_save's write
 // path; wisdom_get lists valid wisdom-category observations for global +
-// the caller's project scope.
-//
-// Repository gap: like memory_inspect, this needs a plain "list valid
-// observations matching category/scope/project" query, which
-// db/repository.ts does not expose (only FTS search or graph expansion).
-// Since repository.ts is frozen, wisdom_get queries the underlying
-// SqliteDatabase directly, re-applying the scope guard documented in
-// repository.ts's scopeGuard(). See the Craftsman Report for a
-// recommendation to add a repository.listObservations() method that would
-// let this (and memory_inspect) drop the direct-SQL workaround.
+// the caller's project scope, via repository.listWisdomRows().
 import { z } from 'zod';
-import type { SqliteDatabase } from '../db/connection.js';
 import type { Repository, Scope } from '../db/repository.js';
-import { renderWisdom, type WisdomRow } from '../render.js';
+import { renderWisdom } from '../render.js';
 import { resolveProjectId, type ToolContext } from './context.js';
 import { handleSave } from './save.js';
 import { DISTILL_NOTE, SCOPE_NOTE } from './descriptions.js';
@@ -46,54 +36,18 @@ export interface WisdomGetOutput {
   text: string;
 }
 
-interface ListWisdomResult {
-  rows: WisdomRow[];
-  total: number;
-}
-
-function listWisdomRows(
-  db: SqliteDatabase,
-  projectId: string | null,
-  category: string | undefined,
-  limit: number
-): ListWisdomResult {
-  const categories = category ? [category] : [...WISDOM_CATEGORIES];
-  const categoryPlaceholders = categories.map(() => '?').join(',');
-  // Scope guard kept semantically identical to the pre-filter version: global
-  // rows are always visible, project/private rows only when they match the
-  // caller's resolved project_id.
-  const whereClause = `WHERE o.invalidated_at IS NULL
-         AND o.category IN (${categoryPlaceholders})
-         AND (o.scope = 'global' OR (o.scope IN ('project','private') AND o.project_id = ?))`;
-
-  const total = (
-    db
-      .prepare(`SELECT COUNT(*) as count FROM observations o ${whereClause}`)
-      .get(...categories, projectId) as { count: number }
-  ).count;
-
-  const rows = db
-    .prepare(
-      `SELECT o.category as category, o.text as text, o.confidence as confidence,
-              o.valid_from as validFrom
-       FROM observations o
-       ${whereClause}
-       ORDER BY CASE o.confidence WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END ASC,
-                o.valid_from DESC
-       LIMIT ?`
-    )
-    .all(...categories, projectId, limit) as unknown as WisdomRow[];
-
-  return { rows, total };
-}
-
-export function handleWisdomGet(db: SqliteDatabase, input: WisdomGetInput, ctx: ToolContext): WisdomGetOutput {
+export async function handleWisdomGet(
+  repo: Repository,
+  input: WisdomGetInput,
+  ctx: ToolContext
+): Promise<WisdomGetOutput> {
   const resolved = resolveProjectId(ctx, input.project_id);
   if (!resolved.ok) {
     return { text: `Rejected: ${resolved.message}` };
   }
   const limit = input.limit ?? DEFAULT_WISDOM_LIMIT;
-  const { rows, total } = listWisdomRows(db, resolved.projectId, input.category, limit);
+  const categories = input.category ? [input.category] : [...WISDOM_CATEGORIES];
+  const { rows, total } = await repo.listWisdomRows(categories, resolved.projectId, limit);
   const text = renderWisdom(rows);
   if (total > rows.length) {
     return { text: `${text}\n\n[+${total - rows.length} more — raise limit or filter by category]` };
@@ -124,16 +78,14 @@ export interface WisdomAddOutput {
   text: string;
 }
 
-export function handleWisdomAdd(
+export async function handleWisdomAdd(
   repo: Repository,
-  db: SqliteDatabase,
   input: WisdomAddInput,
   ctx: ToolContext
-): WisdomAddOutput {
+): Promise<WisdomAddOutput> {
   const scope: Scope = input.scope ?? 'project';
-  const result = handleSave(
+  const result = await handleSave(
     repo,
-    db,
     {
       facts: [
         {
