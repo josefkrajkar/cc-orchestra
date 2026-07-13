@@ -57,7 +57,7 @@ The practical result: install either plugin alone, both together, or uninstall o
 
 ## Install
 
-Both plugins are distributed as Claude Code plugins through the marketplace system. There is no npm package yet — npm publication of the `orchestra-memory` MCP server is deliberately deferred; the marketplace is the only distribution channel for now.
+Both plugins are distributed as Claude Code plugins through the marketplace system. This repository is itself the marketplace — there is no separate marketplace checkout to maintain, and no npm package yet (npm publication of the `orchestra-memory` MCP server is deliberately deferred).
 
 ### Requirements
 
@@ -65,26 +65,65 @@ Both plugins are distributed as Claude Code plugins through the marketplace syst
 - **Node.js ≥ 22.5**, for `orchestra-memory` only — its MCP server relies on the `node:sqlite` builtin. `orchestra` itself has no Node dependency.
 - If `jq` or a sufficiently recent Node is missing, both plugins fail open: hooks and tools report a visible warning and degrade to their fallback behavior rather than crashing.
 
-### From a marketplace (source is a local path or a Git repo)
+### Standard install
 
 ```bash
-# 1. Register the marketplace once — <marketplace-source> is either a local
-#    path to a marketplace checkout, or a Git/GitHub source (see below)
-claude plugin marketplace add <marketplace-source> --scope user
+# 1. Register this repo as a marketplace, once
+claude plugin marketplace add jKrajkar/cc-orchestra
 
-# 2. Install the plugin(s) you want, referencing that marketplace by name
-claude plugin install orchestra@<marketplace-name>
-claude plugin install orchestra-memory@<marketplace-name>
+# 2. Install the plugin(s) you want, referencing the "orchestra" marketplace by name
+claude plugin install orchestra@orchestra
+claude plugin install orchestra-memory@orchestra   # optional but recommended
 
 # 3. Verify
 claude plugin list
 ```
 
-Use `--scope project` in step 1 instead of `--scope user` to register the marketplace for a single project only.
+Add `--scope project` to step 1 to register the marketplace for a single project only instead of for your whole user account (the default). No build step is required on the consumer's side: `orchestra-memory`'s MCP server bundle (`mcp-server/dist/server.mjs`) ships prebuilt in the repo.
 
-### From GitHub (public release)
+### Or just ask Claude Code
 
-Once this repo is published, `<marketplace-source>` above can be the GitHub repository directly (owner/repo or full URL), instead of a local path — `claude plugin marketplace add` accepts a Git source the same way it accepts a local one. Consult `claude plugin marketplace add --help` for the exact accepted source forms for your Claude Code version. No build step is required on the consumer's side: `orchestra-memory`'s MCP server bundle (`mcp-server/dist/server.mjs`) ships prebuilt in the repo.
+Don't want to run the commands yourself? Paste this prompt into any Claude Code session and let it do the install for you:
+
+```text
+Install the Orchestra plugins for me:
+1. Run `claude plugin marketplace add jKrajkar/cc-orchestra`
+2. Run `claude plugin install orchestra@orchestra`
+3. Run `claude plugin install orchestra-memory@orchestra`
+4. Run `claude plugin list` and confirm both plugins show as enabled.
+If any step fails, show me the exact error and suggest a fix. Note the requirements:
+bash + jq for orchestra's hooks (Unix-only), and Node.js >= 22.5 for orchestra-memory.
+```
+
+Restart the session (or start a new one) afterwards so the plugins' hooks and commands load.
+
+### Zero-step install for teams
+
+To have every teammate on a project get Orchestra automatically (after a one-time trust confirmation), commit an entry like this to the project's `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "orchestra": {
+      "source": { "source": "github", "repo": "jKrajkar/cc-orchestra" }
+    }
+  },
+  "enabledPlugins": {
+    "orchestra@orchestra": true,
+    "orchestra-memory@orchestra": true
+  }
+}
+```
+
+With this in place, teammates who open the project only need to confirm the workspace-trust / plugin-install prompt that Claude Code shows the first time — Claude Code ≥ v2.1.195 requires this explicit install consent as a security boundary (not a bug), and there is no way to skip it silently. Once confirmed, both plugins auto-enable for that project with no further commands. Anyone who wants to opt out afterward can disable a plugin via `/plugin`.
+
+### Local development install
+
+To load a plugin for a single session without registering any marketplace — useful while developing this repo itself:
+
+```bash
+claude --plugin-dir ./packages/orchestra
+```
 
 ### The three supported permutations
 
@@ -96,14 +135,14 @@ Once this repo is published, `<marketplace-source>` above can be the GitHub repo
 
 ```bash
 # Both
-claude plugin install orchestra@<marketplace-name>
-claude plugin install orchestra-memory@<marketplace-name>
+claude plugin install orchestra@orchestra
+claude plugin install orchestra-memory@orchestra
 
 # orchestra only
-claude plugin install orchestra@<marketplace-name>
+claude plugin install orchestra@orchestra
 
 # orchestra-memory only
-claude plugin install orchestra-memory@<marketplace-name>
+claude plugin install orchestra-memory@orchestra
 ```
 
 ## Uninstall / cleanup
@@ -112,8 +151,8 @@ Removing a plugin does not, by itself, delete the state it left behind. To fully
 
 ```bash
 # 1. Uninstall the plugin(s)
-claude plugin uninstall orchestra@<marketplace-name>
-claude plugin uninstall orchestra-memory@<marketplace-name>
+claude plugin uninstall orchestra@orchestra
+claude plugin uninstall orchestra-memory@orchestra
 
 # 2. Purge orchestra-memory's global state (only if you installed it)
 rm -rf ~/.claude/orchestra-memory/graph.db ~/.claude/orchestra-memory/backups/

@@ -44,13 +44,13 @@ Distribution is currently the Claude Code plugin marketplace only — there is n
 
 ```bash
 # 1. Register the marketplace that hosts this plugin (once per machine)
-claude plugin marketplace add <marketplace-source> --scope user
+claude plugin marketplace add jKrajkar/cc-orchestra --scope user
 
 # 2. Install orchestra-memory on its own...
-claude plugin install orchestra-memory@<marketplace-name>
+claude plugin install orchestra-memory@orchestra
 
 # ...or alongside orchestra, for the full multi-agent + memory experience
-claude plugin install orchestra@<marketplace-name>
+claude plugin install orchestra@orchestra
 
 # 3. Verify
 claude plugin list

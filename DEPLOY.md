@@ -5,142 +5,80 @@ This monorepo ships two independent Claude Code plugins:
 - `packages/orchestra` — the orchestration plugin
 - `packages/orchestra-memory` — the standalone graph-memory MCP server plugin
 
-Both are consumed by `orchestra-marketplace`, a **non-git** directory that Claude
-Code reads plugin metadata from. In local development the marketplace links to
-this repo via relative symlinks (see `orchestra-marketplace/.claude-plugin/marketplace.json`
-and the `orchestra` / `orchestra-memory` symlinks next to it). For a real deploy —
-or for any target that is a plain directory rather than a symlink (e.g. a plugin
-cache, a colleague's marketplace checkout, a CI artifact dir) — use `rsync`
-following the mandatory safety procedure below.
+Both are consumed directly from this repository via its own marketplace
+manifest, [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)
+— **this repo is the marketplace**. There is no separate `orchestra-marketplace`
+checkout to keep in sync and no rsync step: consumers register this repo as a
+Git-source marketplace (`claude plugin marketplace add jKrajkar/cc-orchestra`)
+and Claude Code fetches plugin metadata straight from GitHub.
 
-This procedure and its constraints come from the graph-memory design doc
-(`docs/design/graph-memory-design.md`, Phase 9 / deploy section): the marketplace target is
-**not a git repo**, so there is no safety net from version control — rsync
-mistakes there are permanent unless you've taken your own backup first.
+## Deploy = commit + push to `main`
 
-## Mandatory constraints
+Because marketplace and plugin sources are both resolved from this Git repo,
+"deploying" a change is simply committing it and pushing to `main` on GitHub.
+Any consumer whose marketplace entry points at `jKrajkar/cc-orchestra` will
+pick up the new commit the next time Claude Code refreshes that marketplace
+(e.g. via `claude plugin marketplace update` or the periodic background
+refresh) — there is no separate publish/sync step to run.
 
-1. **Backup the target first — always.** The marketplace directory is not
-   version-controlled. Before touching it, copy it somewhere safe. There is no
-   `git checkout` to fall back on if something goes wrong.
-2. **`--dry-run` first, every time.** Run the exact command you intend to run,
-   with `--dry-run` (`-n`) added, and read the output line by line before
-   dropping the flag. Never skip this step, even for "trivial" changes.
-3. **Never use `--delete`.** We only ever add/update files in the target. We do
-   not want rsync deciding what to remove — that is how unrelated content
-   (including the fable-model experiment, see below) gets destroyed.
-4. **`--exclude node_modules`.** Neither package ships a `node_modules`
-   directory. `orchestra-memory`'s MCP server uses `node:sqlite` (a Node
-   built-in) specifically so there are zero native dependencies and nothing
-   `node_modules`-shaped to sync — do not let a stray local install leak into
-   the deploy.
-5. **DO ship `dist/`.** `packages/orchestra-memory/mcp-server/dist/` is the
-   prebuilt esbuild bundle and is intentionally committed to this repo — it is
-   the actual artifact the MCP server runs from. Do not exclude it, do not
-   treat it like a build cache.
-6. **Preserve the fable-model experiment in the target.** The marketplace (or
-   plugin cache) directory may contain a `fable-model` experiment that lives
-   only in the target, not in this source repo. Because we never use
-   `--delete`, an rsync run with no matching source path cannot remove it — but
-   still explicitly exclude any `fable-model*` path from the sync as a second
-   layer of protection, and re-confirm in the `--dry-run` output that it is not
-   listed as a change.
+## Pre-release checklist
 
-## Example: deploying `packages/orchestra`
+Run through this before pushing a change that should count as a release
+(a new plugin version, a behavior change, or a fix consumers should pick up):
+
+- [ ] **Bump plugin versions.** If the change affects `packages/orchestra` and/or
+      `packages/orchestra-memory`, bump the `version` field in the corresponding
+      `packages/*/​.claude-plugin/plugin.json` (semver — patch for fixes, minor
+      for backwards-compatible features, major for breaking changes).
+- [ ] **Rebuild and commit `dist/` if `orchestra-memory` source changed.** If
+      `packages/orchestra-memory/mcp-server/src/` or `schema.sql` changed, run
+      `npm run build` inside `packages/orchestra-memory/mcp-server` and commit
+      the resulting `dist/server.mjs`, `dist/server.mjs.map`, and
+      `dist/schema.sql` alongside the source change. A PR that changes `src/`
+      but not `dist/` is missing a build step — see
+      [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full gotcha.
+- [ ] **Run tests.** `npm test` inside `packages/orchestra-memory/mcp-server`
+      must pass (currently 44 tests, including the `project_id` cross-package
+      contract test).
+- [ ] **Validate the marketplace manifest.** `claude plugin validate .` from
+      the repo root must pass (add `--strict` to also fail on warnings).
+- [ ] **Shell scripts pass `shellcheck`** if you touched any hook script in
+      either package (see [`CONTRIBUTING.md`](CONTRIBUTING.md)).
 
 ```bash
-REPO=/path/to/orchestra-plugin          # your local monorepo checkout
-SRC="$REPO/packages/orchestra/"
-DST=/path/to/marketplace-target/orchestra/
+# From the repo root
+claude plugin validate .
 
-# 1. Backup the target first (mandatory).
-cp -a "$DST" "${DST%/}.bak.$(date +%Y%m%dT%H%M%S)"
-
-# 2. Dry run — review every line before proceeding.
-rsync -av --dry-run \
-  --exclude 'node_modules' \
-  --exclude 'fable-model*' \
-  "$SRC" "$DST"
-
-# 3. Only after reviewing the dry run output, run for real.
-#    Note: no --delete, ever.
-rsync -av \
-  --exclude 'node_modules' \
-  --exclude 'fable-model*' \
-  "$SRC" "$DST"
+# From packages/orchestra-memory/mcp-server
+npm run build   # only if src/ or schema.sql changed
+npm test
 ```
 
-## Example: deploying `packages/orchestra-memory`
+Once the checklist is green, commit and push to `main` as usual (or merge the
+PR) — that push *is* the deploy.
+
+## Legacy: the rsync / `orchestra-marketplace` flow is retired
+
+Earlier versions of this repo were deployed by rsyncing `packages/orchestra`
+and `packages/orchestra-memory` into a separate, non-git
+`orchestra-marketplace` checkout, which held its own
+`.claude-plugin/marketplace.json` and symlinks (or rsynced copies) of each
+plugin. That flow is retired now that this repo carries its own
+`.claude-plugin/marketplace.json` at the root and plugins are referenced via
+relative `source` paths (`./packages/orchestra`, `./packages/orchestra-memory`)
+directly from GitHub.
+
+If you previously registered the old `orchestra-marketplace` checkout or a
+GitHub source pointing at a per-plugin repo, remove it and re-add this repo
+instead:
 
 ```bash
-REPO=/path/to/orchestra-plugin          # your local monorepo checkout
-SRC="$REPO/packages/orchestra-memory/"
-DST=/path/to/marketplace-target/orchestra-memory/
-
-# 1. Backup the target first (mandatory).
-cp -a "$DST" "${DST%/}.bak.$(date +%Y%m%dT%H%M%S)"
-
-# 2. Dry run — review every line before proceeding.
-#    dist/ is NOT excluded — the prebuilt bundle must ship.
-rsync -av --dry-run \
-  --exclude 'node_modules' \
-  --exclude 'fable-model*' \
-  "$SRC" "$DST"
-
-# 3. Only after reviewing the dry run output, run for real.
-rsync -av \
-  --exclude 'node_modules' \
-  --exclude 'fable-model*' \
-  "$SRC" "$DST"
+claude plugin marketplace remove <old-marketplace-name>
+claude plugin marketplace add jKrajkar/cc-orchestra
+claude plugin install orchestra@orchestra
+claude plugin install orchestra-memory@orchestra
 ```
 
-Adjust `SRC`/`DST` for your actual target (e.g. a real `orchestra-marketplace`
-checkout on another machine, or a plugin cache directory). The trailing slash
-on both `SRC` and `DST` matters — it copies the *contents* of `packages/orchestra/`
-into the target directory rather than nesting it one level deeper.
-
-## Checklist before every deploy
-
-- [ ] Target backed up (full copy, timestamped)
-- [ ] `--dry-run` output reviewed line by line
-- [ ] No `--delete` flag present in the command
-- [ ] `--exclude node_modules` present
-- [ ] `dist/` is present in the dry-run output as something being copied (not excluded)
-- [ ] `fable-model*` excluded, and confirmed absent from the dry-run change list
-- [ ] Real run only executed after all of the above are confirmed
-
-## Alternative: public release via a GitHub `source`
-
-The rsync procedure above is for local/dev deploys into a filesystem-based
-marketplace target. For a public release, `orchestra-marketplace`'s
-`.claude-plugin/marketplace.json` can point each plugin at a GitHub repo
-instead of a local symlink, and Claude Code will fetch the plugin directly
-from GitHub — no rsync, no local checkout, no symlink management:
-
-```json
-{
-  "plugins": [
-    {
-      "name": "orchestra",
-      "source": {
-        "source": "github",
-        "repo": "<owner>/orchestra"
-      }
-    },
-    {
-      "name": "orchestra-memory",
-      "source": {
-        "source": "github",
-        "repo": "<owner>/orchestra-memory"
-      }
-    }
-  ]
-}
-```
-
-This requires each plugin to be published as its own repo (or the marketplace
-entry to point at a subdirectory within a monorepo, depending on what the
-`github` source type supports). Use this path once the plugins are stable and
-publicly released; use the rsync procedure above for local development and
-private/internal deploys where the target is a plain directory rather than
-something Claude Code can fetch from GitHub.
+No rsync, backup, or dry-run steps are needed going forward — see the
+[README's Install section](README.md#install) for the current, supported
+install flow.

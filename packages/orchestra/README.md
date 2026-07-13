@@ -10,10 +10,10 @@ Claude Code plugins install through the marketplace system.
 
 ```bash
 # 1. Register the marketplace (once)
-claude plugin marketplace add <marketplace-source> --scope user
+claude plugin marketplace add jKrajkar/cc-orchestra --scope user
 
 # 2. Install the plugin
-claude plugin install orchestra@<marketplace-name>
+claude plugin install orchestra@orchestra
 
 # 3. Verify
 claude plugin list

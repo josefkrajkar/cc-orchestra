@@ -1,0 +1,20 @@
+{
+  "name": "orchestra",
+  "description": "Marketplace for the Orchestra plugins — the orchestra multi-agent orchestration plugin and its optional orchestra-memory graph-memory companion.",
+  "owner": {
+    "name": "Josef Krajkář",
+    "url": "https://github.com/jKrajkar/cc-orchestra"
+  },
+  "plugins": [
+    {
+      "name": "orchestra",
+      "source": "./packages/orchestra",
+      "description": "Multi-agent orchestration plugin for Claude Code — inspired by oh-my-openagent's 3-layer architecture (planning, orchestration, execution) with specialized agents, wisdom accumulation, file claiming, and quality gates. Works fully standalone. Graph memory is provided by the separate optional companion plugin orchestra-memory; when it is not installed, orchestra falls back to the legacy .claude/orchestra-wisdom.json file for wisdom accumulation."
+    },
+    {
+      "name": "orchestra-memory",
+      "source": "./packages/orchestra-memory",
+      "description": "Standalone cross-project graph-memory MCP server for Claude Code — SQLite-backed (node:sqlite) with FTS5 full-text search, temporal validity, and global/project/private scoping. Injects token-dense memory context at session start and after compaction. Works standalone or as the optional companion to the orchestra orchestration plugin."
+    }
+  ]
+}
