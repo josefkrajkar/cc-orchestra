@@ -5,7 +5,7 @@ A monorepo with two independently installable Claude Code plugins:
 | Package | What it is | Standalone? |
 |---|---|---|
 | [`packages/orchestra`](packages/orchestra/README.md) | Multi-agent orchestration plugin — 3-layer architecture (planning/orchestration/execution), 8 specialized agents, staged pipeline with quality gates, file claiming, wisdom accumulation, boulder session persistence. | Yes |
-| [`packages/orchestra-memory`](packages/orchestra-memory/README.md) | Standalone cross-project graph-memory MCP server — SQLite-backed (`node:sqlite`), FTS5 full-text search, temporal validity, `global`/`project`/`private` scoping, plus session-start/post-compact context injection. | Yes |
+| [`packages/orchestra-memory`](packages/orchestra-memory/README.md) | Standalone cross-project graph-memory MCP server — SQLite-backed (`node:sqlite`), FTS5 full-text search, temporal validity, `global`/`project`/`private` scoping, plus session-start/post-compact context injection. Optionally runs as a shared HTTP server in Docker so multiple machines see the same memory (opt-in remote mode). | Yes |
 
 Both plugins are fully usable on their own. `orchestra-memory` is the **optional companion** to `orchestra`: install it alongside `orchestra` to upgrade wisdom accumulation from a single project's JSON file into a graph of facts shared across every project on the machine, with temporal validity and scoping. Install `orchestra` without it and everything still works — it falls back to the legacy `.claude/orchestra-wisdom.json` file. Install `orchestra-memory` on its own and you get a general-purpose graph-memory MCP server with no dependency on the orchestration plugin at all.
 
@@ -35,7 +35,11 @@ orchestra/                              # this repo
 │       ├── .mcp.json                   # registers the orchestra-memory MCP server (own PLUGIN_ROOT)
 │       ├── mcp-server/                 # TypeScript source → esbuild → dist/server.mjs
 │       ├── scripts/                    # memory injection + daily backup hooks
+│       ├── Dockerfile                  # optional remote mode — server image (--serve-http)
+│       ├── docker-compose.yml          # optional remote mode — one-command bring-up
+│       ├── .env.example                # optional remote mode — server-side env template
 │       └── README.md
+├── docs/design/                        # design docs (graph memory, package split, remote mode, skills)
 ├── .github/                            # CI workflows
 ├── LICENSE                             # MIT
 ├── CONTRIBUTING.md                     # build/test/contract notes for contributors
@@ -63,6 +67,7 @@ Both plugins are distributed as Claude Code plugins through the marketplace syst
 
 - **bash + jq**, for the orchestration plugin's hooks. Hooks are shell scripts and are **Unix-only** (macOS/Linux) — Windows is not supported.
 - **Node.js ≥ 22.5**, for `orchestra-memory` only — its MCP server relies on the `node:sqlite` builtin. `orchestra` itself has no Node dependency.
+- **Docker** (optional), only if you opt into `orchestra-memory`'s remote mode — running the memory server as a shared HTTP service via the bundled `Dockerfile`/`docker-compose.yml`. The default local mode needs no Docker at all.
 - If `jq` or a sufficiently recent Node is missing, both plugins fail open: hooks and tools report a visible warning and degrade to their fallback behavior rather than crashing.
 
 ### From a marketplace (source is a local path or a Git repo)
@@ -93,6 +98,8 @@ Once this repo is published, `<marketplace-source>` above can be the GitHub repo
 | **Both plugins** | Full experience — orchestration plus cross-project graph memory with temporal validity and scoping. Wisdom accumulates into the graph; `/memory-setup` and `/memory-migrate` are functional. |
 | **`orchestra` only** | Orchestration works fully — agents, commands, skills, hooks, file claiming, quality gates. Wisdom accumulation falls back to the per-project `.claude/orchestra-wisdom.json` file. `/memory-setup`/`/memory-migrate` are no-ops with a clear message (see [`packages/orchestra/README.md`](packages/orchestra/README.md)). |
 | **`orchestra-memory` only** | A standalone graph-memory MCP server — usable by any agent/tooling that speaks MCP and can discover its tools via ToolSearch, entirely independent of the orchestration plugin. |
+
+In any permutation that includes `orchestra-memory`, the plugin defaults to a **local** per-machine `graph.db`. To share one memory across several machines, you can additionally run the server in Docker and point clients at it via `ORCHESTRA_MEMORY_URL`/`ORCHESTRA_MEMORY_TOKEN` — fully opt-in (leave the env vars unset and everything stays local), and fail-open: if the remote server is unreachable, session-start injection falls back to the local database rather than erroring. See [`packages/orchestra-memory/README.md`](packages/orchestra-memory/README.md) ("Optional: remote mode") for bring-up, security notes, and the backup/restore procedure.
 
 ```bash
 # Both
@@ -126,6 +133,7 @@ Notes:
 - `~/.claude/orchestra-memory/graph.db` and its `backups/` directory are **user-global**, not per-project — deleting them removes graph memory for every project on the machine, not just the current one.
 - `.claude/orchestra-boulder.json` and `.claude/orchestra-wisdom.json` are per-project and live inside each project's own `.claude/` directory; repeat step 3 for every project where you used `orchestra`.
 - Neither cleanup step touches `.claude/orchestra-log.jsonl` (the `SubagentStart`/`SubagentStop` audit trail) or `.claude/workflows/` (saved Workflow scripts) automatically — remove those too if you want a fully clean slate.
+- If you used `orchestra-memory`'s **remote mode**, the Docker host keeps its own state: `docker compose down -v` (run in `packages/orchestra-memory/` on that host) removes the container **and** the `/data` volume holding the shared `graph.db` and its backups. Omit `-v` to keep the data.
 
 ## Contributing
 
