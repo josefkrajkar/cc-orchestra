@@ -52,7 +52,7 @@ fi
 # Check for file locks (if lock directory exists)
 if [ -d "$LOCK_DIR" ]; then
   # Create a safe filename from the path
-  LOCK_KEY=$(echo "$FILE_PATH" | sed 's/[^a-zA-Z0-9]/_/g')
+  LOCK_KEY="${FILE_PATH//[^a-zA-Z0-9]/_}"
   LOCK_FILE="$LOCK_DIR/$LOCK_KEY"
 
   if [ -f "$LOCK_FILE" ]; then

@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MEMORY_INJECT_SCRIPT="$SCRIPT_DIR/memory-inject.sh"
 MEMORY_BLOCK=""
 if [ -f "$MEMORY_INJECT_SCRIPT" ]; then
-  MEMORY_BLOCK=$(cd "$CWD" && bash "$MEMORY_INJECT_SCRIPT" 2>/dev/null || true)
+  MEMORY_BLOCK=$(cd "$CWD" && bash "$MEMORY_INJECT_SCRIPT" 2>/dev/null) || MEMORY_BLOCK=""
 fi
 MEMORY_BACKUP_SCRIPT="$SCRIPT_DIR/memory-backup.sh"
 if [ -f "$MEMORY_BACKUP_SCRIPT" ]; then
