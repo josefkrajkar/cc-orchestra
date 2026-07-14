@@ -11,12 +11,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 22.12 is the dev-toolchain floor: vitest 4's rolldown/vite bindings
-        # declare engines ^20.19.0 || >=22.12.0, and npm silently skips
-        # optional deps that fail the engine check — on 22.5 the native
-        # binding is never installed and vitest crashes at startup.
-        # (Runtime floor of the built server itself stays 22.5 / node:sqlite.)
-        node-version: ["22.12", "latest"]
+        # 22.13 is the real floor for this suite:
+        # - vitest 4's rolldown/vite bindings declare engines >=22.12, and npm
+        #   silently skips optional deps that fail the engine check — on older
+        #   Node the native binding is never installed and vitest crashes.
+        # - node:sqlite is flag-free only since 22.13 (22.5–22.12 need
+        #   --experimental-sqlite, which nothing here passes).
+        node-version: ["22.13", "latest"]
     defaults:
       run:
         working-directory: packages/orchestra-memory/mcp-server
