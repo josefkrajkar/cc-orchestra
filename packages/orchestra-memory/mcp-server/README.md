@@ -23,7 +23,7 @@ The trade-off is honest: no semantic ("fuzzy meaning") search — BM25 is lexica
 
 ## Requirements
 
-- **Node.js ≥ 22.5** — the server uses the `node:sqlite` builtin (`DatabaseSync`), stable since Node 22.5, with zero native/npm SQLite dependencies. Tested on Node 25.9.
+- **Node.js ≥ 22.16** — the server uses the `node:sqlite` builtin (`DatabaseSync`), which is flag-free and compiled with FTS5 (required by the schema) since Node 22.16, with zero native/npm SQLite dependencies. Tested on Node 25.9.
 - No other runtime dependencies are installed into the deployed bundle — `@modelcontextprotocol/sdk` and `zod` are bundled at build time by esbuild.
 
 ## Install
@@ -152,7 +152,7 @@ Tool descriptions are intentionally terse — they give the calling model just e
 
 Every entry point into this server is designed to degrade silently rather than break the rest of the session:
 
-- If `node:sqlite` isn't available (Node < 22.5, or the build was missing at import time), `tryOpenDb()` returns `{ db: null, diagnostic }` instead of throwing; MCP tool calls then return a "disabled for this session" text result instead of crashing the server.
+- If `node:sqlite` isn't available (Node < 22.16, or the build was missing at import time), `tryOpenDb()` returns `{ db: null, diagnostic }` instead of throwing; MCP tool calls then return a "disabled for this session" text result instead of crashing the server.
 - `--inject` always exits 0, even on internal error — diagnostics go to stderr, stdout is empty, and the calling bash hook (`scripts/memory-inject.sh`) itself also checks for `node` on PATH and a built bundle before ever invoking the CLI.
 - `--migrate` dry-run mode always exits 0. `--migrate --commit` is the one exception to fail-open: since it's about to write to a shared, cross-project database, it exits 1 on any failure instead of pretending success — data safety takes priority there.
 - `--backup` always exits 0, even on internal error — diagnostics go to stderr, stdout is empty, and `scripts/memory-backup.sh` itself also checks for `node` on PATH and a built bundle before ever invoking the CLI, mirroring `memory-inject.sh`'s guard chain.

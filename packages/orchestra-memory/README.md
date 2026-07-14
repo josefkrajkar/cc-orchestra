@@ -60,7 +60,7 @@ Use `--scope project` instead of `--scope user` to install only for the current 
 
 ### Requirements
 
-- **Node.js ≥ 22.5**, for the `node:sqlite` builtin the server depends on. If Node is missing or too old, every hook and tool call fails open silently (see below) — the rest of your Claude Code session is unaffected.
+- **Node.js ≥ 22.16**, for the `node:sqlite` builtin the server depends on. If Node is missing or too old, every hook and tool call fails open silently (see below) — the rest of your Claude Code session is unaffected.
 
 ## Where your data lives
 
@@ -84,7 +84,7 @@ The last 7 daily snapshots are kept by default (older ones are pruned automatica
 
 Nothing about this plugin is allowed to break your session. Every entry point — both hooks and every MCP tool — is fail-open by design:
 
-- No Node on `PATH`, or Node older than 22.5, or the bundled server not built: hooks silently no-op (no output, exit 0), and MCP tool calls return a plain "disabled for this session" message instead of erroring.
+- No Node on `PATH`, or Node older than 22.16, or the bundled server not built: hooks silently no-op (no output, exit 0), and MCP tool calls return a plain "disabled for this session" message instead of erroring.
 - A missing or unreachable database behaves the same way — you get a clear "disabled" message from the tools, not a crash.
 - The one deliberate exception is a *committed* legacy-memory migration (`--migrate --commit`): because that step writes into the shared, cross-project database, it reports failure loudly rather than silently pretending to succeed. Everything else prioritizes never interrupting your work over surfacing an error.
 

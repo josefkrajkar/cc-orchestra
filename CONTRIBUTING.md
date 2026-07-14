@@ -44,8 +44,9 @@ npm run build
 npm test
 ```
 
-- **Node.js ≥ 22.5.0 is required.** The server uses `node:sqlite`, which is
-  only available (and stable) from Node 22.5 onward. There is no native
+- **Node.js ≥ 22.16.0 is required.** The server uses `node:sqlite`, which is
+  usable without flags only from Node 22.13 onward, and whose bundled SQLite
+  is compiled with FTS5 (required by the schema) only from Node 22.16 onward. There is no native
   module / `better-sqlite3` fallback — that dependency was deliberately
   rejected so the plugin ships with zero native/platform-specific binaries.
 - `npm test` runs the vitest suite directly against `src/` (build-independent)
@@ -154,7 +155,7 @@ fail-open behavior in any hook changes.
   out every affected site in the PR description.
 - Run the full test suite (`npm test` in `mcp-server/`) and, if you touched
   any shell script, run `shellcheck` on it locally before opening a PR.
-- CI runs on Node 22.5 and the latest Node release, executes the test suite,
+- CI runs on Node 22.16 and the latest Node release, executes the test suite,
   builds and smoke-boots the server, and lints all shell scripts with
   `shellcheck`.
 

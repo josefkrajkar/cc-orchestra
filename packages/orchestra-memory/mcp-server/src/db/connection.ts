@@ -1,6 +1,6 @@
 // SQLite connection management for the Orchestra graph memory store.
 //
-// Fail-open contract: node:sqlite is only available on Node >= 22.5. We must
+// Fail-open contract: node:sqlite is only available on Node >= 22.16. We must
 // never let importing this module crash the process on older Node — all
 // resolution of the `node:sqlite` builtin happens lazily inside tryOpenDb()
 // via createRequire(), so a missing module surfaces as a diagnostic string
@@ -47,7 +47,7 @@ export function tryOpenDb(dbPath: string = defaultDbPath()): OpenResult {
     return {
       db: null,
       diagnostic:
-        'orchestra-memory: node:sqlite is unavailable (requires Node >= 22.5). ' +
+        'orchestra-memory: node:sqlite is unavailable (requires Node >= 22.16). ' +
         'Graph memory tools will be disabled for this session. ' +
         `Underlying error: ${errorMessage(err)}`,
     };

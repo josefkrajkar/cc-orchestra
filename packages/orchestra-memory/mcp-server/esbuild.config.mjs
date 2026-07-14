@@ -15,7 +15,7 @@ await build({
   bundle: true,
   platform: 'node',
   format: 'esm',
-  target: 'node22.5',
+  target: 'node22.16',
   // Never bundle Node built-ins (incl. node:sqlite) — they must be resolved
   // at runtime by the host Node process, not inlined by esbuild.
   external: ['node:*'],

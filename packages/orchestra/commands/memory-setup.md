@@ -23,7 +23,7 @@ else
 fi
 ```
 
-Report the exact version string. `orchestra-memory` requires **Node ≥ 22.5** (needs the stable `node:sqlite` builtin). If node is missing or below 22.5, tell the user clearly that graph memory tools will be unavailable this session (the MCP server and all hooks fail open — nothing else in Orchestra breaks), and stop here — there's nothing else useful to diagnose without a working Node.
+Report the exact version string. `orchestra-memory` requires **Node ≥ 22.16** (needs the `node:sqlite` builtin flag-free and with FTS5, both true only since 22.16). If node is missing or below 22.16, tell the user clearly that graph memory tools will be unavailable this session (the MCP server and all hooks fail open — nothing else in Orchestra breaks), and stop here — there's nothing else useful to diagnose without a working Node.
 
 ### 1b. MCP server bundle
 

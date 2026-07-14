@@ -38,9 +38,9 @@ A unified **cross-project graph memory** system shipped as part of the Orchestra
 ### Approach A — TypeScript + esbuild bundle into a single JS file (RECOMMENDED)
 Source in TS (`mcp-server/src/`), built via `esbuild` into a single `mcp-server/dist/server.mjs` (bundling all JS dependencies except the native SQLite). `.mcp.json` launches `node ${CLAUDE_PLUGIN_ROOT}/mcp-server/dist/server.mjs`.
 
-- **SQLite driver:** primarily `node:sqlite` (stable since Node 22.5+, no native compilation, no `node_modules` in the distribution). Fallback detection: if `node:sqlite` is unavailable, the server prints diagnostics and MCP tools return a degraded status (fail-open).
+- **SQLite driver:** primarily `node:sqlite` (stable since Node 22.16+, no native compilation, no `node_modules` in the distribution). Fallback detection: if `node:sqlite` is unavailable, the server prints diagnostics and MCP tools return a degraded status (fail-open).
 - **Pros:** type safety, a single distributed artifact, readable development, easy testing (vitest). `node:sqlite` = zero native dependencies → rsync-safe, no `node_modules` bundle in the marketplace.
-- **Cons:** a build step (devs must run `npm run build` before deploy); requires Node ≥ 22.5 for `node:sqlite`; FTS5 must be built into the SQLite build (`node:sqlite`'s SQLite has FTS5 compiled in — verify at acceptance).
+- **Cons:** a build step (devs must run `npm run build` before deploy); requires Node ≥ 22.16 for `node:sqlite`; FTS5 must be built into the SQLite build (`node:sqlite`'s SQLite has FTS5 compiled in — verify at acceptance).
 
 ### Approach B — Plain Node, no dependencies, pure `node:sqlite`, hand-written MCP JSON-RPC
 No build, no TS, no esbuild — just `mcp-server/server.mjs` in plain JS, a manual implementation of the MCP stdio protocol.
@@ -55,7 +55,7 @@ No build, no TS, no esbuild — just `mcp-server/server.mjs` in plain JS, a manu
 ### Recommendation
 **Approach A** (TypeScript + esbuild bundle, `node:sqlite` as the primary driver with fail-open detection). It combines DX/type safety with zero native dependencies and rsync-safety. We use `@modelcontextprotocol/sdk` (bundled by esbuild into dist — it's pure JS), so we avoid the manual protocol implementation of approach B while avoiding the native dependency of approach C.
 
-**Node fallback strategy:** if `node` is missing or < 22.5, the `.mcp.json` server won't boot → MCP tools are unavailable. Bash hooks (SessionStart) MUST therefore detect memory availability and fail open (no injection, no error) — exactly like today's `jq` detection.
+**Node fallback strategy:** if `node` is missing or < 22.16, the `.mcp.json` server won't boot → MCP tools are unavailable. Bash hooks (SessionStart) MUST therefore detect memory availability and fail open (no injection, no error) — exactly like today's `jq` detection.
 
 ### Rejected options (recap)
 - **Kuzu** — archived after the Apple acquisition, uncertain future.
@@ -247,7 +247,7 @@ Paths are always absolute, under `<project-root>/`.
 - **Acceptance:** `/wisdom show` works from both the graph and legacy JSON; executor writes a fact to the graph; a subagent can call memory_search.
 
 ### Phase 6 — UX for disabling built-in auto-memory
-- **OWNS:** `commands/memory-setup.md` (new command `/memory-setup`: check Node ≥ 22.5, verify the MCP server, run migration, print instructions for `"autoMemoryEnabled": false` — never sets it without confirmation), an edit to README.md.
+- **OWNS:** `commands/memory-setup.md` (new command `/memory-setup`: check Node ≥ 22.16, verify the MCP server, run migration, print instructions for `"autoMemoryEnabled": false` — never sets it without confirmation), an edit to README.md.
 - **MUST NOT MODIFY:** `~/.claude/settings.json` automatically.
 - **Dependencies:** Phase 2, 7. **Parallelizable:** no.
 - **Risk:** built-in + graph memory running concurrently → `/memory-setup` explicitly warns and verifies.
@@ -284,7 +284,7 @@ Paths are always absolute, under `<project-root>/`.
 
 | Risk | Probability | Impact | Mitigation |
 |---|---|---|---|
-| Node.js missing / < 22.5 | Medium | High | Fail-open everywhere; bash detection; /memory-setup verification; node:sqlite = 0 native dependencies |
+| Node.js missing / < 22.16 | Medium | High | Fail-open everywhere; bash detection; /memory-setup verification; node:sqlite = 0 native dependencies |
 | SessionStart latency > 100 ms | Medium | High | Hard timeout, indexes, top-K limit, fail-open with no injection |
 | Cross-project leakage | Low | Critical | Scope mandatory; default = global + current project; private NEVER cross-project; e2e test |
 | Injection exceeds 10 KB | Medium | Medium | Byte-count truncation, overflow → file + preview |

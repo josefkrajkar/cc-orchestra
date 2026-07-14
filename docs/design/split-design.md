@@ -106,7 +106,7 @@ Not publishing to npm for now. Kept for future reference:
 ### Phase 5 — Public-release scaffolding (parallel after 1) — 1 day
 - [ ] **T5.1** Root `LICENSE` (chosen license) + per-package license reference. — OWNS: `LICENSE`.
 - [ ] **T5.2** `CONTRIBUTING.md`: build, test, the `project_id` newline contract, the `schema.sql`-copied-at-build gotcha, monorepo layout. — OWNS: `CONTRIBUTING.md`.
-- [ ] **T5.3** `.github/workflows/ci.yml`: Node 22.5+ matrix, vitest (42 tests), build + smoke-boot `dist/server.mjs`, `npm pack --dry-run`, `shellcheck` on all `scripts/*.sh`, project_id contract test. — OWNS: workflow file.
+- [ ] **T5.3** `.github/workflows/ci.yml`: Node 22.16+ matrix, vitest (42 tests), build + smoke-boot `dist/server.mjs`, `npm pack --dry-run`, `shellcheck` on all `scripts/*.sh`, project_id contract test. — OWNS: workflow file.
 - [ ] **T5.4** Uninstall/cleanup docs: remove plugins + purge `~/.claude/orchestra-memory/` (graph.db + backups/). — OWNS: README section.
 - [ ] **T5.5** Install-from-GitHub story: marketplace-add commands for both plugins (npm story deferred). — OWNS: README section.
 - [ ] **T5.6** Genericize `PLAN-graph-memory.md` personal paths (lines 6, 208); decide keep/translate/move to `docs/design/`. — OWNS: `PLAN-graph-memory.md`.

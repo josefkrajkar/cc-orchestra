@@ -191,7 +191,7 @@ Wisdom JSON výše je per-projekt. Od verze 2.1.0 k němu přibyla **cross-proje
 > /memory-setup
 ```
 
-1. Zkontroluje Node.js (potřeba ≥ 22.5 kvůli `node:sqlite`) a že je MCP server sestavený (`mcp-server/dist/server.mjs`) — pokud ne, nabídne `npm install && npm run build`
+1. Zkontroluje Node.js (potřeba ≥ 22.16 kvůli `node:sqlite`) a že je MCP server sestavený (`mcp-server/dist/server.mjs`) — pokud ne, nabídne `npm install && npm run build`
 2. Ověří dostupnost `orchestra-memory` nástrojů přes ToolSearch a zobrazí `memory_stats`
 3. Nabídne migraci starých pamětí (dry-run → potvrzení → zápis)
 4. Vypíše přesný JSON snippet pro vypnutí vestavěné auto-memory — **tuhle změnu uděláš sám**, plugin `~/.claude/settings.json` nikdy needituje automaticky
@@ -373,9 +373,9 @@ Server se při startu naváže na vlastní projektovou identitu (sha256 z jeho c
 
 **Setup a migrace:** `/memory-setup` (diagnostika Node/bundle/tools, nabídka migrace, instrukce pro vypnutí built-in auto-memory) a `/memory-migrate` (dry-run inventura → potvrzení → mechanický import wisdom.json + LLM destilace markdown pamětí do grafu) — viz sekce "Graph memory — paměť napříč projekty" výše.
 
-**Fail-open:** chybí-li Node (< 22.5) nebo sestavený bundle, MCP tools i injekční hooky (`scripts/memory-inject.sh`, re-injekce v `scripts/post-compact.sh`) tiše přeskočí — zbytek Orchestra funguje beze změny, přesně jako u chybějícího `jq`.
+**Fail-open:** chybí-li Node (< 22.16) nebo sestavený bundle, MCP tools i injekční hooky (`scripts/memory-inject.sh`, re-injekce v `scripts/post-compact.sh`) tiše přeskočí — zbytek Orchestra funguje beze změny, přesně jako u chybějícího `jq`.
 
-**Požadavky:** Node.js ≥ 22.5 (kvůli `node:sqlite`); v dev checkoutu build krok `cd mcp-server && npm install && npm run build` (marketplace deploy dodává už sestavený `dist/`).
+**Požadavky:** Node.js ≥ 22.16 (kvůli `node:sqlite`); v dev checkoutu build krok `cd mcp-server && npm install && npm run build` (marketplace deploy dodává už sestavený `dist/`).
 
 ### Skills (automatická aktivace)
 
@@ -486,7 +486,7 @@ Hardening batch nad graph memory hooky z v2.1.0, žádné nové nástroje/agenty
 
 ## 2026-07-04 upgrade — Graph memory (v2.1.0)
 
-Plugin poprvé získává Node.js závislost: `mcp-server/` je nový bundlovaný MCP server `orchestra-memory` nad SQLite (`node:sqlite`, vyžaduje Node ≥ 22.5), doplňující dosavadní per-projektovou wisdom o cross-project graf s temporální validitou a scopingem `global/project/private`. Devět nástrojů (`memory_save`, `memory_search`, `memory_link`, `memory_traverse`, `memory_inspect`, `memory_invalidate`, `memory_stats`, `wisdom_get`, `wisdom_add`) je registrováno přes `.mcp.json` a discoverovatelných přes ToolSearch. `scripts/memory-inject.sh` injektuje relevantní fakta při `SessionStart` (rozpočet 9500 B), `scripts/post-compact.sh` re-injektuje po kompakci (4000 B), obojí fail-open bez Node/bundle. `skills/memory-discipline/SKILL.md` definuje write-discipline (WHEN/HOW/SCOPE/anti-spam). Agenti executor/conductor/wisdom.md nyní volají primárně MCP nástroje s legacy `.claude/orchestra-wisdom.json` fallbackem; scout/craftsman/scholar/sentinel/architect mají sekci "Memory access" pro read přístup. Nové příkazy `/memory-setup` (onboarding, diagnostika, instrukce pro vypnutí built-in auto-memory) a `/memory-migrate` (dry-run → potvrzení → import) uzavírají migrační cestu ze dvou starých systémů (wisdom JSON + markdown auto-memory). Vestavěná auto-memory Claude Code (`autoMemoryEnabled`) se **nevypíná automaticky** — je to vždy explicitní krok uživatele, viz `/memory-setup`.
+Plugin poprvé získává Node.js závislost: `mcp-server/` je nový bundlovaný MCP server `orchestra-memory` nad SQLite (`node:sqlite`, vyžaduje Node ≥ 22.16), doplňující dosavadní per-projektovou wisdom o cross-project graf s temporální validitou a scopingem `global/project/private`. Devět nástrojů (`memory_save`, `memory_search`, `memory_link`, `memory_traverse`, `memory_inspect`, `memory_invalidate`, `memory_stats`, `wisdom_get`, `wisdom_add`) je registrováno přes `.mcp.json` a discoverovatelných přes ToolSearch. `scripts/memory-inject.sh` injektuje relevantní fakta při `SessionStart` (rozpočet 9500 B), `scripts/post-compact.sh` re-injektuje po kompakci (4000 B), obojí fail-open bez Node/bundle. `skills/memory-discipline/SKILL.md` definuje write-discipline (WHEN/HOW/SCOPE/anti-spam). Agenti executor/conductor/wisdom.md nyní volají primárně MCP nástroje s legacy `.claude/orchestra-wisdom.json` fallbackem; scout/craftsman/scholar/sentinel/architect mají sekci "Memory access" pro read přístup. Nové příkazy `/memory-setup` (onboarding, diagnostika, instrukce pro vypnutí built-in auto-memory) a `/memory-migrate` (dry-run → potvrzení → import) uzavírají migrační cestu ze dvou starých systémů (wisdom JSON + markdown auto-memory). Vestavěná auto-memory Claude Code (`autoMemoryEnabled`) se **nevypíná automaticky** — je to vždy explicitní krok uživatele, viz `/memory-setup`.
 
 ## 2026-06-12 upgrade
 

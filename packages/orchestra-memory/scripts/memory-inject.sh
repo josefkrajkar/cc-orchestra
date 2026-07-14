@@ -59,7 +59,7 @@ if [ ! -f "$SERVER_ENTRY" ]; then
   exit 0
 fi
 
-# Fail-open: node too old for node:sqlite (needs >= 22.5; a major-version
+# Fail-open: node too old for node:sqlite (needs >= 22.16; a major-version
 # check is a cheap, good-enough proxy here — the CLI itself also detects
 # node:sqlite unavailability internally and fails open).
 NODE_MAJOR=$(node -e 'process.stdout.write(String(process.versions.node.split(".")[0]))' 2>/dev/null || echo "")

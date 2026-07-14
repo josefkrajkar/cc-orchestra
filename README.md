@@ -50,8 +50,8 @@ Claude Code has no formal inter-plugin dependency mechanism, so `orchestra` and 
 
 - **No cross-plugin path references.** `orchestra` ships no `.mcp.json` and holds no reference anywhere to `orchestra-memory`'s `mcp-server/` directory. Each plugin resolves its own scripts and, where applicable, its own MCP server strictly under its **own** `${CLAUDE_PLUGIN_ROOT}` — a plugin cannot address another plugin's root.
 - **Decoupled via separate hooks, not a shared one.** Both plugins register their own `SessionStart` and `PostCompact` hooks; Claude Code runs both independently when both are installed. `orchestra-memory`'s hooks handle graph-memory injection and the daily `graph.db` backup. `orchestra`'s hooks handle boulder state and the legacy wisdom-file summary only.
-- **Runtime discovery, not a hard dependency.** `orchestra`'s agents and commands look up `orchestra-memory`'s MCP tools (`memory_save`, `memory_search`, `wisdom_get`, `wisdom_add`, etc.) via ToolSearch at runtime — they are not pre-attached. If the tools can't be found (plugin not installed, Node < 22.5, or the bundle isn't built), every code path that touches wisdom falls back automatically to reading/writing the per-project `.claude/orchestra-wisdom.json` file, exactly as `orchestra` behaved before graph memory existed.
-- **Fail-open, always.** Every point of contact between the two plugins is designed to degrade silently to "orchestra-memory absent" rather than error. This is true whether `orchestra-memory` was never installed, was uninstalled, or is temporarily unavailable (e.g. Node downgraded below 22.5).
+- **Runtime discovery, not a hard dependency.** `orchestra`'s agents and commands look up `orchestra-memory`'s MCP tools (`memory_save`, `memory_search`, `wisdom_get`, `wisdom_add`, etc.) via ToolSearch at runtime — they are not pre-attached. If the tools can't be found (plugin not installed, Node < 22.16, or the bundle isn't built), every code path that touches wisdom falls back automatically to reading/writing the per-project `.claude/orchestra-wisdom.json` file, exactly as `orchestra` behaved before graph memory existed.
+- **Fail-open, always.** Every point of contact between the two plugins is designed to degrade silently to "orchestra-memory absent" rather than error. This is true whether `orchestra-memory` was never installed, was uninstalled, or is temporarily unavailable (e.g. Node downgraded below 22.16).
 
 The practical result: install either plugin alone, both together, or uninstall one without the other, and nothing breaks — see [Install](#install) for the three supported permutations.
 
@@ -62,7 +62,7 @@ Both plugins are distributed as Claude Code plugins through the marketplace syst
 ### Requirements
 
 - **bash + jq**, for the orchestration plugin's hooks. Hooks are shell scripts and are **Unix-only** (macOS/Linux) — Windows is not supported.
-- **Node.js ≥ 22.5**, for `orchestra-memory` only — its MCP server relies on the `node:sqlite` builtin. `orchestra` itself has no Node dependency.
+- **Node.js ≥ 22.16**, for `orchestra-memory` only — its MCP server relies on the `node:sqlite` builtin, which is flag-free and compiled with FTS5 only since Node 22.16. `orchestra` itself has no Node dependency.
 - If `jq` or a sufficiently recent Node is missing, both plugins fail open: hooks and tools report a visible warning and degrade to their fallback behavior rather than crashing.
 
 ### Standard install
@@ -92,7 +92,7 @@ Install the Orchestra plugins for me:
 3. Run `claude plugin install orchestra-memory@orchestra`
 4. Run `claude plugin list` and confirm both plugins show as enabled.
 If any step fails, show me the exact error and suggest a fix. Note the requirements:
-bash + jq for orchestra's hooks (Unix-only), and Node.js >= 22.5 for orchestra-memory.
+bash + jq for orchestra's hooks (Unix-only), and Node.js >= 22.16 for orchestra-memory.
 ```
 
 Restart the session (or start a new one) afterwards so the plugins' hooks and commands load.

@@ -21121,7 +21121,7 @@ function tryOpenDb(dbPath = defaultDbPath()) {
   } catch (err) {
     return {
       db: null,
-      diagnostic: `orchestra-memory: node:sqlite is unavailable (requires Node >= 22.5). Graph memory tools will be disabled for this session. Underlying error: ${errorMessage(err)}`
+      diagnostic: `orchestra-memory: node:sqlite is unavailable (requires Node >= 22.16). Graph memory tools will be disabled for this session. Underlying error: ${errorMessage(err)}`
     };
   }
   try {

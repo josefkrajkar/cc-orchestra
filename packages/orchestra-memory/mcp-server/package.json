@@ -11,7 +11,7 @@
     "test:watch": "vitest"
   },
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.16.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
