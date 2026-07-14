@@ -11,13 +11,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 22.13 is the real floor for this suite:
+        # 22.16 is the real floor for this suite (each constraint verified
+        # empirically against the exact Node version):
         # - vitest 4's rolldown/vite bindings declare engines >=22.12, and npm
         #   silently skips optional deps that fail the engine check — on older
         #   Node the native binding is never installed and vitest crashes.
         # - node:sqlite is flag-free only since 22.13 (22.5–22.12 need
         #   --experimental-sqlite, which nothing here passes).
-        node-version: ["22.13", "latest"]
+        # - Node's bundled SQLite is compiled with FTS5 only since 22.16 —
+        #   the graph-memory schema needs it ("no such module: fts5" before).
+        node-version: ["22.16", "latest"]
     defaults:
       run:
         working-directory: packages/orchestra-memory/mcp-server
