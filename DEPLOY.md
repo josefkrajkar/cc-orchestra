@@ -9,14 +9,14 @@ Both are consumed directly from this repository via its own marketplace
 manifest, [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)
 — **this repo is the marketplace**. There is no separate `orchestra-marketplace`
 checkout to keep in sync and no rsync step: consumers register this repo as a
-Git-source marketplace (`claude plugin marketplace add jKrajkar/cc-orchestra`)
+Git-source marketplace (`claude plugin marketplace add josefkrajkar/cc-orchestra`)
 and Claude Code fetches plugin metadata straight from GitHub.
 
 ## Deploy = commit + push to `main`
 
 Because marketplace and plugin sources are both resolved from this Git repo,
 "deploying" a change is simply committing it and pushing to `main` on GitHub.
-Any consumer whose marketplace entry points at `jKrajkar/cc-orchestra` will
+Any consumer whose marketplace entry points at `josefkrajkar/cc-orchestra` will
 pick up the new commit the next time Claude Code refreshes that marketplace
 (e.g. via `claude plugin marketplace update` or the periodic background
 refresh) — there is no separate publish/sync step to run.
@@ -74,7 +74,7 @@ instead:
 
 ```bash
 claude plugin marketplace remove <old-marketplace-name>
-claude plugin marketplace add jKrajkar/cc-orchestra
+claude plugin marketplace add josefkrajkar/cc-orchestra
 claude plugin install orchestra@orchestra
 claude plugin install orchestra-memory@orchestra
 ```

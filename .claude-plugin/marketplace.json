@@ -3,7 +3,7 @@
   "description": "Marketplace for the Orchestra plugins — the orchestra multi-agent orchestration plugin and its optional orchestra-memory graph-memory companion.",
   "owner": {
     "name": "Josef Krajkář",
-    "url": "https://github.com/jKrajkar/cc-orchestra"
+    "url": "https://github.com/josefkrajkar/cc-orchestra"
   },
   "plugins": [
     {

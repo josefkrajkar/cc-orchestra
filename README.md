@@ -69,7 +69,7 @@ Both plugins are distributed as Claude Code plugins through the marketplace syst
 
 ```bash
 # 1. Register this repo as a marketplace, once
-claude plugin marketplace add jKrajkar/cc-orchestra
+claude plugin marketplace add josefkrajkar/cc-orchestra
 
 # 2. Install the plugin(s) you want, referencing the "orchestra" marketplace by name
 claude plugin install orchestra@orchestra
@@ -87,7 +87,7 @@ Don't want to run the commands yourself? Paste this prompt into any Claude Code 
 
 ```text
 Install the Orchestra plugins for me:
-1. Run `claude plugin marketplace add jKrajkar/cc-orchestra`
+1. Run `claude plugin marketplace add josefkrajkar/cc-orchestra`
 2. Run `claude plugin install orchestra@orchestra`
 3. Run `claude plugin install orchestra-memory@orchestra`
 4. Run `claude plugin list` and confirm both plugins show as enabled.
@@ -105,7 +105,7 @@ To have every teammate on a project get Orchestra automatically (after a one-tim
 {
   "extraKnownMarketplaces": {
     "orchestra": {
-      "source": { "source": "github", "repo": "jKrajkar/cc-orchestra" }
+      "source": { "source": "github", "repo": "josefkrajkar/cc-orchestra" }
     }
   },
   "enabledPlugins": {

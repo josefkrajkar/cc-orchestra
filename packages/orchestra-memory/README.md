@@ -44,7 +44,7 @@ Distribution is currently the Claude Code plugin marketplace only — there is n
 
 ```bash
 # 1. Register the marketplace that hosts this plugin (once per machine)
-claude plugin marketplace add jKrajkar/cc-orchestra --scope user
+claude plugin marketplace add josefkrajkar/cc-orchestra --scope user
 
 # 2. Install orchestra-memory on its own...
 claude plugin install orchestra-memory@orchestra
